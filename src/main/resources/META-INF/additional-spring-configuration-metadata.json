@@ -1,0 +1,14 @@
+{
+  "properties": [
+    {
+      "name": "mrs.file.picture.image-max-size",
+      "type": "org.springframework.util.unit.DataSize",
+      "description": "图片文件最大上传大小(KB、MB、GB).",
+      "sourceType": "cloud.marisa.picturebackend.config.PictureConfig",
+      "defaultValue": "10MB",
+      "validation": {
+        "pattern": "^(?i)\\d+(\\.\\d+)?(KB|MB|GB)$"
+      }
+    }
+  ]
+}

@@ -1,0 +1,87 @@
+# 你需要准备一个 application.yml 配置文件
+# 以下内容都是 application.yml 中的内容，只是部分数据不方便上传
+# 你可以复制文件中的所有内容到一个新建的 application.yml 中
+# 或者直接将该文件重命名为 application.yml
+server:
+  port: 8100
+  servlet:
+    context-path: /api
+
+spring:
+  # 开放更大的文件上传体积
+  servlet:
+    multipart:
+      max-file-size: 10MB
+  application:
+    name: picture-backend
+  # 数据库配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/picture_backend
+    username: root
+    password: 123456
+  # redis 配置
+  redis:
+    host: 127.0.0.1
+    password: 123456
+    port: 6379
+    database: 2
+
+# 接口文档配置
+knife4j:
+  enable: true
+  openapi:
+    title: 雾雨云图库接口文档
+    description: "雾雨云图库接口文档"
+    email: admin@marisa.cloud
+    concat: MarisaDAZE
+    url: https://blog.marisa.cloud
+    version: v1.0
+    license: Apache 2.0
+    license-url: https://stackoverflow.com/
+    terms-of-service-url: https://stackoverflow.com/
+    group:
+      default:
+        group-name: DEFAULT
+        api-rule: package
+        api-rule-resources:
+          - cloud.marisa.picturebackend.controller
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: false
+    # 仅在开发环境开启日志
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      logic-delete-field: isDelete # 全局逻辑删除的实体字段名
+      logic-delete-value: 1 # 逻辑已删除值（默认为 1）
+      logic-not-delete-value: 0 # 逻辑未删除值（默认为 0）
+# minio 配置
+minio:
+  url: http://127.0.0.1:9000
+  access-key: minio
+  secret-key: 123456
+  bucket-name: picture-backend
+  folders:
+    pictures: /picture
+
+# 个性化配置
+mrs:
+  # 图片批量下载时的地址，支持format格式
+  picture-bath-url: https://cn.bing.com/images/async?q=%s&mmasync=1
+  file:
+    picture:
+      image-max-size: 10MB
+      # 支持上传的图片格式
+      image-suffix:
+        - .jpg
+        - .png
+        - .jpeg
+        - .webp
+      # 支持上传的图片MIME类型
+      url-image-type:
+        - image/jpg
+        - image/png
+        - image/jpeg
+        - image/webp
