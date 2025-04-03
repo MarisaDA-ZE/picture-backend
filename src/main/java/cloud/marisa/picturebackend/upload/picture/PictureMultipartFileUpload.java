@@ -3,6 +3,7 @@ package cloud.marisa.picturebackend.upload.picture;
 import cloud.marisa.picturebackend.config.PictureConfig;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
+import cloud.marisa.picturebackend.util.ImageUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.unit.DataSize;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -72,5 +73,14 @@ public class PictureMultipartFileUpload extends PictureUploadTemplate {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件读取失败");
         }
 
+    }
+
+    @Override
+    protected Long getPictureSize(Object inputSource) {
+        if (inputSource == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        MultipartFile multipartFile = (MultipartFile) inputSource;
+        return multipartFile.getSize();
     }
 }

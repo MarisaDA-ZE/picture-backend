@@ -20,7 +20,7 @@ public class PageRequest {
     /**
      * 每页条数
      */
-    private int size = 10;
+    private int pageSize = 10;
 
     /**
      * 排序字段（如age、level这些）

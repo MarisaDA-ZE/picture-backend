@@ -22,7 +22,7 @@
 
     <sql id="Base_Column_List">
         id,account,nick_name,
-        password,salt,role,
+        password,role,
         phone,email,profile,
         avatar,is_delete,create_time,
         update_time,edit_time

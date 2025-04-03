@@ -159,7 +159,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "查询条件不能为空");
         }
         int current = queryUserRequest.getCurrent();
-        int size = queryUserRequest.getSize();
+        int size = queryUserRequest.getPageSize();
         Page<User> pageResult = this.page(new Page<>(current, size), queryWrapper);
         Page<UserVo> result = new Page<>(current, size, pageResult.getTotal());
         result.setRecords(User.toVoList(pageResult.getRecords()));

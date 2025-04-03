@@ -19,6 +19,11 @@ public class Constants {
     public static final int MAX_PAGE_SIZE = 20;
 
     /**
+     * 缩略图最大尺寸（最长边长）
+     */
+    public static final int THUMB_MAX_SIZE = 1000;
+
+    /**
      * 图片缓存前缀
      */
     public static final String PICTURE_CACHE_PREFIX = "mrs_picture:picture_vo_page_cache";

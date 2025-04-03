@@ -25,12 +25,10 @@ import cloud.marisa.picturebackend.util.*;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
-import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -115,8 +113,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         if (inputSource instanceof String) {
             uploadTemplate = pictureUrlUpload;
         }
+        long current = System.currentTimeMillis();
         // 保存图片到文件服务器
         UploadPictureResult uploadPictureResult = uploadTemplate.uploadPictureObject(inputSource, MrsPathUtil.repairPath(PICTURE_PATH));
+        System.out.println("上传耗时: " + (System.currentTimeMillis() - current));
         Picture picture = getPicture(loginUser, uploadPictureResult);
         // 自定义文件名（入库名不影响存储名）
         String picName = uploadRequest.getPicName();
@@ -184,8 +184,17 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         Picture picture = new Picture();
         picture.setUserId(loginUser.getId());
         picture.setName(uploadPictureResult.getPicName());
+        // 默认图
         picture.setUrl(uploadPictureResult.getUrl());
         picture.setSavedPath(uploadPictureResult.getSavedPath());
+        // 拇指图
+        picture.setThumbPath(uploadPictureResult.getThumbPath());
+        picture.setThumbnailUrl(uploadPictureResult.getUrlThumb());
+        // 原图
+        picture.setOriginalPath(uploadPictureResult.getOriginalPath());
+        picture.setOriginalUrl(uploadPictureResult.getUrlOriginal());
+        // ...
+        picture.setMd5(uploadPictureResult.getMd5());
         picture.setPicSize(uploadPictureResult.getPicSize());
         picture.setPicWidth(uploadPictureResult.getPicWidth());
         picture.setPicHeight(uploadPictureResult.getPicHeight());
@@ -365,12 +374,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
     @Override
     public PictureVo getPictureVo(Picture picture) {
-        PictureVo vo = new PictureVo();
-        BeanUtils.copyProperties(picture, vo);
-        List<String> tags = JSONUtil.toList(picture.getTags(), String.class);
-        vo.setTags(tags);
+        PictureVo vo = PictureVo.toVO(picture);
         Long userId = picture.getUserId();
-        if (userId != null && userId > 0) {
+        if (vo != null && userId != null && userId > 0) {
             User user = userService.getById(userId);
             vo.setUserVo(User.toVO(user));
         }
@@ -380,7 +386,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     @Override
     public Page<Picture> getPicturePage(PictureQueryRequest queryRequest) {
         int current = queryRequest.getCurrent();
-        int size = queryRequest.getSize();
+        int size = queryRequest.getPageSize();
         LambdaQueryWrapper<Picture> queryWrapper = getQueryWrapper(queryRequest);
         return this.page(new Page<>(current, size), queryWrapper);
     }
@@ -402,6 +408,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         List<PictureVo> pictureVos = records.stream().map(picture -> {
             PictureVo vo = PictureVo.toVO(picture);
             if (vo != null) {
+                // 不能在查列表的时候就拿到所有格式的图片信息
+                // 不然容易被爬
+                vo.setUrl(null);
+                vo.setOriginalUrl(null);
                 if (userVos.containsKey(picture.getUserId())) {
                     vo.setUserVo(userVos.get(picture.getUserId()).get(0));
                 } else {

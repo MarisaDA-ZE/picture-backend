@@ -9,10 +9,8 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.util.ObjectUtils;
 
 import java.io.Serializable;
-import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
-import java.util.stream.Collectors;
 
 /**
  * @author MarisaDAZE
@@ -43,6 +41,15 @@ public class PictureVo implements Serializable {
      * 图片URL地址
      */
     private String url;
+
+    /**
+     * 缩略图 url
+     */
+    private String thumbnailUrl;
+    /**
+     * 缩略图 url
+     */
+    private String originalUrl;
 
     /**
      * 图片名称

@@ -8,8 +8,14 @@
             <id property="id" column="id" jdbcType="BIGINT"/>
             <result property="userId" column="user_id" jdbcType="BIGINT"/>
             <result property="url" column="url" jdbcType="VARCHAR"/>
+            <result property="thumbnailUrl" column="url_thumb" jdbcType="VARCHAR"/>
+            <result property="originalUrl" column="url_original" jdbcType="VARCHAR"/>
             <result property="name" column="name" jdbcType="VARCHAR"/>
             <result property="introduction" column="introduction" jdbcType="VARCHAR"/>
+            <result property="md5" column="fingerprint" jdbcType="VARCHAR"/>
+            <result property="savedPath" column="saved_path" jdbcType="VARCHAR"/>
+            <result property="thumbPath" column="thumb_path" jdbcType="VARCHAR"/>
+            <result property="originalPath" column="original_path" jdbcType="VARCHAR"/>
             <result property="category" column="category" jdbcType="VARCHAR"/>
             <result property="tags" column="tags" jdbcType="VARCHAR"/>
             <result property="picSize" column="pic_size" jdbcType="BIGINT"/>
@@ -17,18 +23,24 @@
             <result property="picHeight" column="pic_height" jdbcType="INTEGER"/>
             <result property="picScale" column="pic_scale" jdbcType="DOUBLE"/>
             <result property="picFormat" column="pic_format" jdbcType="VARCHAR"/>
+            <result property="reviewStatus" column="review_status" jdbcType="TINYINT"/>
+            <result property="reviewMessage" column="review_message" jdbcType="VARCHAR"/>
+            <result property="reviewerId" column="reviewer_id" jdbcType="BIGINT"/>
             <result property="createTime" column="create_time" jdbcType="TIMESTAMP"/>
             <result property="updateTime" column="update_time" jdbcType="TIMESTAMP"/>
             <result property="editTime" column="edit_time" jdbcType="TIMESTAMP"/>
+            <result property="reviewTime" column="review_time" jdbcType="TIMESTAMP"/>
             <result property="isDelete" column="is_delete" jdbcType="TINYINT"/>
     </resultMap>
 
     <sql id="Base_Column_List">
-        id,user_id,url,
-        name,introduction,category,
+        id,user_id,url,url_thumb,url_original,
+        name,introduction,fingerprint,saved_path,
+        thumb_path,original_path,category,
         tags,pic_size,pic_width,
         pic_height,pic_scale,pic_format,
-        create_time,update_time,edit_time,
+        review_status,review_message,reviewer_id,
+        create_time,update_time,edit_time,review_time,
         is_delete
     </sql>
 </mapper>

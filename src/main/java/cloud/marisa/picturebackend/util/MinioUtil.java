@@ -106,6 +106,10 @@ public class MinioUtil {
      * @param fileName 文件名称（example.txt）
      */
     public void upload(InputStream is, String fileName) {
+        if (is == null) {
+            System.err.println("文件流是空的.");
+            return;
+        }
         // 使用putObject上传一个文件到存储桶中。
         try (is) {
             minioClient.putObject(PutObjectArgs.builder()

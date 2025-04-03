@@ -40,14 +40,48 @@ public class Picture implements Serializable {
 
     /**
      * 图片URL地址
+     * <p>默认图片，有压缩但不多</p>
      */
+    @TableField("url")
     private String url;
 
     /**
-     * 图片在文件服务器上保存的地址
+     * 拇指图URL地址
+     * <p>拇指图，极致压缩</p>
+     */
+    @TableField("url_thumb")
+    private String thumbnailUrl;
+
+    /**
+     * 原图URL地址
+     * <p>原图，不压缩，会根据这个生成指纹</p>
+     */
+    @TableField("url_original")
+    private String originalUrl;
+
+    /**
+     * 文件指纹（根据原图生成）
+     */
+    @TableField("fingerprint")
+    private String md5;
+
+    /**
+     * 默认图在文件服务器上的地址
      */
     @TableField("saved_path")
     private String savedPath;
+
+    /**
+     * 缩略图在文件服务器上的地址
+     */
+    @TableField("thumb_path")
+    private String thumbPath;
+
+    /**
+     * 原图在文件服务器上的地址
+     */
+    @TableField("original_path")
+    private String originalPath;
 
     /**
      * 图片名称

@@ -6,6 +6,9 @@ server:
   port: 8100
   servlet:
     context-path: /api
+    session:
+      cookie:
+        max-age: 604800
 
 spring:
   # 开放更大的文件上传体积
@@ -14,6 +17,11 @@ spring:
       max-file-size: 10MB
   application:
     name: picture-backend
+    # 分布式session
+  session:
+    store-type: redis
+    # 过期时间 7天（60 * 60 * 24 * 7 = 604800s）
+    timeout: 604800
   # 数据库配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver

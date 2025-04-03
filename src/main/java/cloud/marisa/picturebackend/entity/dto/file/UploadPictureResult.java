@@ -19,11 +19,34 @@ public class UploadPictureResult implements Serializable {
      * 图片地址
      */
     private String url;
+    /**
+     * 拇指图URL地址
+     * <p>拇指图，极致压缩</p>
+     */
+    private String urlThumb;
+
+    /**
+     * 原图URL地址
+     * <p>原图，不压缩，会根据这个生成指纹</p>
+     */
+    private String urlOriginal;
 
     /**
      * 图片在文件服务器上保存的路径
      */
     private String savedPath;
+
+    /**
+     * 缩略图在文件服务器上的地址
+     */
+    private String thumbPath;
+
+    /**
+     * 原图在文件服务器上的地址
+     */
+    private String originalPath;
+
+    private String md5;
 
     /**
      * 图片名称

@@ -60,7 +60,9 @@ public class PictureController {
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
-    // 本地Caffeine缓存
+    /**
+     * 本地Caffeine缓存
+     */
     private final Cache<String, String> PICTURE_LOCAL_CACHE = Caffeine.newBuilder()
             .maximumSize(10000L)
             // 5分钟后过期（5*60=300）
@@ -270,7 +272,7 @@ public class PictureController {
         if (queryRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        int size = queryRequest.getSize();
+        int size = queryRequest.getPageSize();
         if (size > MAX_PAGE_SIZE) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "分页参数过大");
         }
@@ -282,7 +284,8 @@ public class PictureController {
 
     /**
      * 分页查找图片数据
-     * <p>有缓存设计</p>
+     * <p>有二级缓存</p>
+     * TODO: 缓存这块玩法还挺多，直接使用这种方案会有数据不同步的问题
      *
      * @param queryRequest 查询图片的DTO对象
      * @return 图片VO
@@ -294,7 +297,7 @@ public class PictureController {
         if (queryRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        if (queryRequest.getSize() > MAX_PAGE_SIZE) {
+        if (queryRequest.getPageSize() > MAX_PAGE_SIZE) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "分页参数过大");
         }
         queryRequest.setReviewStatus(ReviewStatus.PASS.getValue());

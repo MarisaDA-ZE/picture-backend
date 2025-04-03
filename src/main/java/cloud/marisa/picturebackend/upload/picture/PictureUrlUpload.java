@@ -105,4 +105,19 @@ public class PictureUrlUpload extends PictureUploadTemplate {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "下载文件失败");
         }
     }
+
+    @Override
+    protected Long getPictureSize(Object inputSource) {
+        if (inputSource == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        String url = (String) inputSource;
+        try (HttpResponse response = HttpUtil.createRequest(Method.HEAD, url).execute()) {
+            if (response.getStatus() != HttpStatus.HTTP_OK) {
+                return null;
+            }
+            String contentLength = response.header("Content-Length");
+            return StrUtil.isBlank(contentLength) ? null : Long.parseLong(contentLength);
+        }
+    }
 }

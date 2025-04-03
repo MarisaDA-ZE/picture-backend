@@ -37,6 +37,7 @@
         <jsoup.version>1.15.3</jsoup.version>
         <caffeine.version>3.1.8</caffeine.version>
         <redisson.version>3.21.3</redisson.version>
+        <thumbnailator.version>0.4.20</thumbnailator.version>
     </properties>
     <dependencies>
         <dependency>
@@ -92,11 +93,31 @@
             <scope>import</scope>
         </dependency>
 
-
+        <!-- Redis -->
         <dependency>
-            <groupId>cn.hutool</groupId>
-            <artifactId>hutool-all</artifactId>
-            <version>${hutool.version}</version>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-redis</artifactId>
+        </dependency>
+
+        <!-- Spring Session + Redis -->
+        <dependency>
+            <groupId>org.springframework.session</groupId>
+            <artifactId>spring-session-data-redis</artifactId>
+        </dependency>
+
+
+        <!-- 本地缓存 Caffeine -->
+        <dependency>
+            <groupId>com.github.ben-manes.caffeine</groupId>
+            <artifactId>caffeine</artifactId>
+            <version>${caffeine.version}</version>
+        </dependency>
+
+        <!-- redisson分布式锁 -->
+        <dependency>
+            <groupId>org.redisson</groupId>
+            <artifactId>redisson</artifactId>
+            <version>${redisson.version}</version>
         </dependency>
 
         <dependency>
@@ -121,6 +142,7 @@
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
 
+        <!-- HuTool工具包 -->
         <dependency>
             <groupId>cn.hutool</groupId>
             <artifactId>hutool-all</artifactId>
@@ -128,6 +150,7 @@
             <scope>compile</scope>
         </dependency>
 
+        <!-- MinIO分布式存储引擎 -->
         <!-- https://mvnrepository.com/artifact/io.minio/minio -->
         <dependency>
             <groupId>io.minio</groupId>
@@ -142,12 +165,21 @@
             <optional>true</optional>
         </dependency>
 
-        <!-- 图片工具依赖 -->
+        <!-- ImageIO的webp插件 -->
+        <!-- https://mvnrepository.com/artifact/org.sejda.imageio/webp-imageio -->
         <dependency>
-            <groupId>com.twelvemonkeys.imageio</groupId>
-            <artifactId>imageio-webp</artifactId>
-            <version>${image-io.version}</version>
+            <groupId>org.sejda.imageio</groupId>
+            <artifactId>webp-imageio</artifactId>
+            <version>0.1.6</version>
         </dependency>
+
+        <!-- 图片压缩工具 -->
+        <dependency>
+            <groupId>net.coobird</groupId>
+            <artifactId>thumbnailator</artifactId>
+            <version>${thumbnailator.version}</version>
+        </dependency>
+
 
         <!-- HTML 解析：https://jsoup.org/ -->
         <dependency>
@@ -156,24 +188,6 @@
             <version>${jsoup.version}</version>
         </dependency>
 
-        <!-- Redis -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-data-redis</artifactId>
-        </dependency>
-
-        <!-- 本地缓存 Caffeine -->
-        <dependency>
-            <groupId>com.github.ben-manes.caffeine</groupId>
-            <artifactId>caffeine</artifactId>
-            <version>${caffeine.version}</version>
-        </dependency>
-
-        <dependency>
-            <groupId>org.redisson</groupId>
-            <artifactId>redisson</artifactId>
-            <version>${redisson.version}</version>
-        </dependency>
 
     </dependencies>
     <dependencyManagement>

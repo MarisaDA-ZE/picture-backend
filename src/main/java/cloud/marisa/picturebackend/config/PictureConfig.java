@@ -1,10 +1,8 @@
 package cloud.marisa.picturebackend.config;
 
-import cn.hutool.core.io.unit.DataSize;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.stereotype.Component;
 
@@ -28,6 +26,16 @@ public class PictureConfig {
     private String imageMaxSize;
 
     /**
+     * 图片压缩率[0-1], 1表示不压缩
+     */
+    private Float compressRate;
+
+    /**
+     * 压缩后图片的类型
+     */
+    private String compressImageType;
+
+    /**
      * 允许的文件后缀（.jpg .png ...）
      */
     private List<String> imageSuffix;
@@ -39,6 +47,14 @@ public class PictureConfig {
 
     public void setImageMaxSize(String imageMaxSize) {
         this.imageMaxSize = imageMaxSize;
+    }
+
+    public void setCompressRate(Float compressRate) {
+        this.compressRate = compressRate;
+    }
+
+    public void setCompressImageType(String compressImageType) {
+        this.compressImageType = compressImageType;
     }
 
     public void setImageSuffix(List<String> imageSuffix) {

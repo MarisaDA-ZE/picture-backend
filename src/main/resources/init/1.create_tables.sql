@@ -4,7 +4,6 @@ CREATE TABLE IF NOT EXISTS user  (
     `account` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '账号',
     `nick_name` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '昵称',
     `password` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '密码',
-    `salt` varchar(6) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '盐（6位）',
     `role` varchar(24) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL DEFAULT 'user' COMMENT '用户角色（user、admin）',
     `phone` varchar(11) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '手机号',
     `email` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '邮箱号',
@@ -36,10 +35,15 @@ CREATE TABLE IF NOT EXISTS user_vip (
 CREATE TABLE IF NOT EXISTS picture (
     `id` bigint NOT NULL COMMENT '主键ID',
     `user_id` bigint NOT NULL COMMENT '用户ID',
-    `saved_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '文件在文件服务器上的路径',
-    `url` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '图片URL地址',
     `name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '图片名称',
+    `url` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '图片URL地址',
+    `url_thumb` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '拇指图尺寸URL',
+    `url_original` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '原图尺寸URL',
+    `saved_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '文件在文件服务器上的路径',
+    `thumb_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '缩略图在文件服务器上的地址',
+    `original_path` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '原图在文件服务器上的地址',
     `introduction` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '图片描述',
+    `fingerprint` varchar(48) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '图片指纹（md5值，只为原图生成）',
     `category` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '图片分类',
     `tags` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '图片标签（JSON数组）',
     `pic_size` bigint NULL DEFAULT NULL COMMENT '图片大小',
@@ -47,13 +51,13 @@ CREATE TABLE IF NOT EXISTS picture (
     `pic_height` int NULL DEFAULT NULL COMMENT '图片高度',
     `pic_scale` double NULL DEFAULT NULL COMMENT '图片长宽比',
     `pic_format` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '图片格式',
-    `review_status` tinyint NULL DEFAULT NULL COMMENT '审核状态（0:待审核，1:已通过，2:已拒绝）',
+    `review_status` tinyint NULL DEFAULT 0 COMMENT '审核状态（0:待审核，1:已通过，2:已拒绝）',
     `review_message` varchar(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '审核信息',
     `reviewer_id` bigint NULL DEFAULT NULL COMMENT '审核员ID',
     `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '更新时间',
     `edit_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '编辑时间',
-    `review_time` datetime NULL DEFAULT 0 COMMENT '审核时间',
+    `review_time` datetime NULL DEFAULT NULL COMMENT '审核时间',
     `is_delete` tinyint NULL DEFAULT 0 COMMENT '逻辑删除（0:未删除，1:已删除）',
     PRIMARY KEY (`id`) USING BTREE,
     INDEX `idx_user_id`(`user_id` ASC) USING BTREE COMMENT '用户ID索引',
@@ -62,6 +66,10 @@ CREATE TABLE IF NOT EXISTS picture (
     INDEX `idx_tags`(`tags` ASC) USING BTREE COMMENT '图片标签索引',
     INDEX `idx_introduction`(`introduction` ASC) USING BTREE COMMENT '图片描述索引',
     INDEX `idx_review_status`(`review_status` ASC) USING BTREE COMMENT '审核状态索引',
-    INDEX `idx_reviewer_id`(`reviewer_id` ASC) USING BTREE COMMENT '审核员ID索引'
+    INDEX `idx_reviewer_id`(`reviewer_id` ASC) USING BTREE COMMENT '审核员ID索引',
+    INDEX `idx_fingerprint`(`fingerprint` ASC) USING BTREE COMMENT '文件指纹索引'
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '图片表' ROW_FORMAT = Dynamic;
+
+
+
 
