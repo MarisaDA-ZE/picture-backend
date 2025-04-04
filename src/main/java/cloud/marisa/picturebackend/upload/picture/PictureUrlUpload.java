@@ -95,14 +95,23 @@ public class PictureUrlUpload extends PictureUploadTemplate {
     }
 
     @Override
-    protected InputStream getPictureStream(Object inputSource) {
+    public InputStream getPictureStream(Object inputSource) {
         String url = (String) inputSource;
+        Path tempFile = null;
         try {
-            Path tempFile = Files.createTempFile("download", ".tmp");
+            tempFile = Files.createTempFile("download", ".tmp");
             HttpUtil.downloadFile(url, tempFile.toFile());
             return Files.newInputStream(tempFile);
         } catch (IOException e) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR, "下载文件失败");
+        } finally {
+            try {
+                if (tempFile != null) {
+                    Files.deleteIfExists(tempFile);
+                }
+            } catch (IOException e) {
+                System.err.println("临时文件删除失败: " + e.getMessage());
+            }
         }
     }
 

@@ -128,7 +128,7 @@ public abstract class PictureUploadTemplate {
      * @param inputSource 文件对象/URL
      * @return 输入流
      */
-    protected abstract InputStream getPictureStream(Object inputSource);
+    public abstract InputStream getPictureStream(Object inputSource);
 
     /**
      * 获取图片大小

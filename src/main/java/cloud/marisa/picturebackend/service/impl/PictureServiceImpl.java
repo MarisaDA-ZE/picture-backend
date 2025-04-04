@@ -25,6 +25,7 @@ import cloud.marisa.picturebackend.util.*;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.crypto.digest.MD5;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -107,6 +108,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         if (currentRole == null || currentRole.getLevel() < UserRole.USER.getLevel()) {
             throw new BusinessException(ErrorCode.FORBIDDEN_ERROR);
         }
+
+
         // 上传图片（模板方法模式）
         PictureUploadTemplate uploadTemplate = pictureMultipartFileUpload;
         System.out.println("inputSource: " + inputSource);
@@ -114,10 +117,25 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             uploadTemplate = pictureUrlUpload;
         }
         long current = System.currentTimeMillis();
-        // 保存图片到文件服务器
-        UploadPictureResult uploadPictureResult = uploadTemplate.uploadPictureObject(inputSource, MrsPathUtil.repairPath(PICTURE_PATH));
-        System.out.println("上传耗时: " + (System.currentTimeMillis() - current));
-        Picture picture = getPicture(loginUser, uploadPictureResult);
+        String hex = MD5.create().digestHex(uploadTemplate.getPictureStream(inputSource));
+        // 只找一个就够了，这样会快一点
+        Page<Picture> dbPicturePage = this.lambdaQuery()
+                .eq(Picture::getMd5, hex)
+                .page(new Page<>(1, 1));
+        List<Picture> records = dbPicturePage.getRecords();
+        Picture picture;
+        // 库中不存在该文件
+        if (records == null || records.isEmpty()) {
+            // 保存图片到文件服务器
+            UploadPictureResult uploadPictureResult = uploadTemplate.uploadPictureObject(inputSource, MrsPathUtil.repairPath(PICTURE_PATH));
+            System.out.println("上传耗时: " + (System.currentTimeMillis() - current));
+            picture = getPicture(loginUser, uploadPictureResult);
+        } else {
+            picture = getPicture(loginUser, records.get(0));
+            System.out.println("秒传啦");
+            System.out.println("上传耗时: " + (System.currentTimeMillis() - current));
+        }
+
         // 自定义文件名（入库名不影响存储名）
         String picName = uploadRequest.getPicName();
         if (StrUtil.isNotBlank(picName)) {
@@ -200,6 +218,38 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         picture.setPicHeight(uploadPictureResult.getPicHeight());
         picture.setPicScale(uploadPictureResult.getPicScale());
         picture.setPicFormat(uploadPictureResult.getPicFormat());
+        return picture;
+    }
+
+    /**
+     * 封装图片信息
+     *
+     * @param loginUser 登录用户
+     * @param dbPicture 数据库中的图片信息
+     * @return 图片的DAO对象
+     */
+    private static Picture getPicture(User loginUser, Picture dbPicture) {
+        Picture picture = new Picture();
+        picture.setUserId(loginUser.getId());
+        String originalPath = dbPicture.getOriginalPath();
+        String fileName = originalPath.substring(originalPath.lastIndexOf("/"));
+        picture.setName(fileName);
+        // 默认图
+        picture.setUrl(dbPicture.getUrl());
+        picture.setSavedPath(dbPicture.getSavedPath());
+        // 拇指图
+        picture.setThumbPath(dbPicture.getThumbPath());
+        picture.setThumbnailUrl(dbPicture.getThumbnailUrl());
+        // 原图
+        picture.setOriginalPath(dbPicture.getOriginalPath());
+        picture.setOriginalUrl(dbPicture.getOriginalUrl());
+        // ...
+        picture.setMd5(dbPicture.getMd5());
+        picture.setPicSize(dbPicture.getPicSize());
+        picture.setPicWidth(dbPicture.getPicWidth());
+        picture.setPicHeight(dbPicture.getPicHeight());
+        picture.setPicFormat(dbPicture.getPicFormat());
+        picture.setPicScale(dbPicture.getPicScale());
         return picture;
     }
 
