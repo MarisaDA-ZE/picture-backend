@@ -39,10 +39,15 @@ public class Picture implements Serializable {
     private Long userId;
 
     /**
+     * 所属空间ID
+     */
+    @TableField("space_id")
+    private Long spaceId;
+
+    /**
      * 图片URL地址
      * <p>默认图片，有压缩但不多</p>
      */
-    @TableField("url")
     private String url;
 
     /**

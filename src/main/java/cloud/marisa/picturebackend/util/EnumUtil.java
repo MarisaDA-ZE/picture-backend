@@ -23,7 +23,9 @@ public class EnumUtil {
      * @return 具体的枚举对象
      */
     public static <T, E extends MrsBaseEnum<T>> E fromValue(T value, Class<E> clazz) {
-        if (ObjectUtils.isEmpty(value) || ObjectUtils.isEmpty(clazz)) return null;
+        if (ObjectUtils.isEmpty(value) || ObjectUtils.isEmpty(clazz)) {
+            return null;
+        }
         if (!clazz.isEnum()) {
             throw new IllegalArgumentException("clazz must be an enum type.");
         }

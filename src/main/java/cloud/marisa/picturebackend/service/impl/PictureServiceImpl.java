@@ -1,6 +1,7 @@
 package cloud.marisa.picturebackend.service.impl;
 
 import cloud.marisa.picturebackend.entity.dao.Picture;
+import cloud.marisa.picturebackend.entity.dao.Space;
 import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.entity.dto.common.DeleteRequest;
 import cloud.marisa.picturebackend.entity.dto.file.UploadPictureResult;
@@ -17,6 +18,7 @@ import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.mapper.PictureMapper;
 import cloud.marisa.picturebackend.service.IPictureService;
+import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.service.IUserService;
 import cloud.marisa.picturebackend.upload.picture.PictureMultipartFileUpload;
 import cloud.marisa.picturebackend.upload.picture.PictureUploadTemplate;
@@ -62,6 +64,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     private IUserService userService;
 
     @Autowired
+    private ISpaceService spaceService;
+
+    @Autowired
     private PictureMultipartFileUpload pictureMultipartFileUpload;
 
     @Autowired
@@ -87,6 +92,21 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         if (uploadRequest.getId() != null) {
             pictureId = uploadRequest.getId();
         }
+        Long spaceId = uploadRequest.getSpaceId();
+        // 上传到指定空间，spaceId为空表示公共空间
+        if (spaceId != null) {
+            boolean isAdmin = userService.hasPermission(loginUser, UserRole.ADMIN);
+            // 用户只能上传到自己的空间
+            boolean exists = spaceService.lambdaQuery()
+                    .eq(Space::getId, spaceId)
+                    // 不是管理员，只能传到自己的空间
+                    .eq(!isAdmin, Space::getUserId, loginUser.getId())
+                    .exists();
+            if (!exists) {
+                throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "空间不存在或没有权限");
+            }
+        }
+
         if (pictureId != null) {
             /* 之前的校验方式，判断对象是否存在
                boolean exists = this.lambdaQuery()
@@ -99,7 +119,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             if (picture == null) {
                 throw new BusinessException(ErrorCode.NOT_FOUND, "图片不存在");
             }
-            if (!picture.getUserId().equals(loginUser.getId()) && !SessionUtil.hasPermission(loginUser, UserRole.ADMIN)) {
+            if (!picture.getUserId().equals(loginUser.getId()) && !userService.hasPermission(loginUser, UserRole.ADMIN)) {
                 throw new BusinessException(ErrorCode.FORBIDDEN_ERROR);
             }
         }
@@ -282,6 +302,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             throw new BusinessException(ErrorCode.FORBIDDEN_ERROR);
         }
         this.removeById(picId);
+        // 不要删图的文件，交给以后的定时任务或者别的东西
         // minioUtil.delete(picture.getSavedPath());
         return true;
     }
@@ -537,5 +558,4 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             picture.setReviewTime(new Date());
         }
     }
-
 }

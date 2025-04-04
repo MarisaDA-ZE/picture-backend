@@ -35,6 +35,7 @@ CREATE TABLE IF NOT EXISTS user_vip (
 CREATE TABLE IF NOT EXISTS picture (
     `id` bigint NOT NULL COMMENT '主键ID',
     `user_id` bigint NOT NULL COMMENT '用户ID',
+    `space_id` bigint NULL DEFAULT NULL COMMENT '所属空间ID（为 NULL 表示公共空间）',
     `name` varchar(128) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '图片名称',
     `url` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '图片URL地址',
     `url_thumb` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '拇指图尺寸URL',
@@ -61,6 +62,7 @@ CREATE TABLE IF NOT EXISTS picture (
     `is_delete` tinyint NULL DEFAULT 0 COMMENT '逻辑删除（0:未删除，1:已删除）',
     PRIMARY KEY (`id`) USING BTREE,
     INDEX `idx_user_id`(`user_id` ASC) USING BTREE COMMENT '用户ID索引',
+    INDEX `idx_space_id`(`space_id` ASC) USING BTREE COMMENT '所属空间索引',
     INDEX `idx_name`(`name` ASC) USING BTREE COMMENT '图片名称索引',
     INDEX `idx_category`(`category` ASC) USING BTREE COMMENT '图片分分类索引',
     INDEX `idx_tags`(`tags` ASC) USING BTREE COMMENT '图片标签索引',
@@ -69,6 +71,29 @@ CREATE TABLE IF NOT EXISTS picture (
     INDEX `idx_reviewer_id`(`reviewer_id` ASC) USING BTREE COMMENT '审核员ID索引',
     INDEX `idx_fingerprint`(`fingerprint` ASC) USING BTREE COMMENT '文件指纹索引'
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '图片表' ROW_FORMAT = Dynamic;
+
+-- 图片表 --
+CREATE TABLE IF NOT EXISTS space (
+    `id` bigint NOT NULL COMMENT '主键ID',
+    `user_id` bigint NOT NULL COMMENT '所属用户ID',
+    `space_name` varchar(64) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '空间名称',
+    `space_level` tinyint NOT NULL DEFAULT 0 COMMENT '空间等级（0-普通版、1-专业版、2-旗舰版）',
+    `max_size` bigint NULL DEFAULT 0 COMMENT '最大存储空间（Byte）',
+    `max_count` int NULL DEFAULT 0 COMMENT '最大存储数量（张）',
+    `create_by` bigint NULL DEFAULT NULL COMMENT '空间创建者',
+    `create_time` datetime NULL DEFAULT NULL COMMENT '创建时间',
+    `update_time` datetime NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `edit_time` datetime NULL DEFAULT NULL COMMENT '修改时间',
+    `is_delete` tinyint NULL DEFAULT 0 COMMENT '是否删除（0-未删除、1-已删除）',
+    PRIMARY KEY (`id`) USING BTREE,
+    INDEX `idx_user_id`(`user_id` ASC) USING BTREE COMMENT '用户ID索引',
+    INDEX `idx_space_name`(`space_name` ASC) USING BTREE COMMENT '空间名称索引',
+    INDEX `idx_space_level`(`space_level` ASC) USING BTREE COMMENT '空间等级索引'
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '空间表' ROW_FORMAT = Dynamic;
+
+
+
+
 
 
 

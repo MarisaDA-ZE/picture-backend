@@ -7,6 +7,7 @@
     <resultMap id="BaseResultMap" type="cloud.marisa.picturebackend.entity.dao.Picture">
             <id property="id" column="id" jdbcType="BIGINT"/>
             <result property="userId" column="user_id" jdbcType="BIGINT"/>
+            <result property="spaceId" column="space_id" jdbcType="BIGINT"/>
             <result property="url" column="url" jdbcType="VARCHAR"/>
             <result property="thumbnailUrl" column="url_thumb" jdbcType="VARCHAR"/>
             <result property="originalUrl" column="url_original" jdbcType="VARCHAR"/>
@@ -34,7 +35,7 @@
     </resultMap>
 
     <sql id="Base_Column_List">
-        id,user_id,url,url_thumb,url_original,
+        id,user_id,space_id,url,url_thumb,url_original,
         name,introduction,fingerprint,saved_path,
         thumb_path,original_path,category,
         tags,pic_size,pic_width,
