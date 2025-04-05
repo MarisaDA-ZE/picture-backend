@@ -8,6 +8,7 @@ import cloud.marisa.picturebackend.entity.dto.file.UploadPictureResult;
 import cloud.marisa.picturebackend.entity.dto.picture.*;
 import cloud.marisa.picturebackend.entity.vo.PictureVo;
 import cloud.marisa.picturebackend.entity.vo.UserVo;
+import cloud.marisa.picturebackend.enums.MathComparator;
 import cloud.marisa.picturebackend.enums.ReviewStatus;
 import cloud.marisa.picturebackend.enums.SortEnum;
 import cloud.marisa.picturebackend.enums.UserRole;
@@ -537,13 +538,42 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         if (queryRequest.getPicSize() != null) {
             queryWrapper.eq(Picture::getPicSize, queryRequest.getPicSize());
         }
-        // 图片宽度，等值匹配
-        if (queryRequest.getPicWidth() != null) {
-            queryWrapper.eq(Picture::getPicWidth, queryRequest.getPicWidth());
+        // 宽高匹配类型
+        MathComparator whTypeEnum = EnumUtil.fromValue(queryRequest.getWhType(), MathComparator.class);
+        if (whTypeEnum == null) {
+            whTypeEnum = MathComparator.EQ;
         }
-        // 图片高度，等值匹配
+        // 图片宽度，动态匹配
+        if (queryRequest.getPicWidth() != null) {
+            Integer picWidth = queryRequest.getPicWidth();
+            switch (whTypeEnum) {
+                case GT:
+                    queryWrapper.gt(Picture::getPicWidth, picWidth);
+                    break;
+                case LT:
+                    queryWrapper.lt(Picture::getPicWidth, picWidth);
+                    break;
+                case EQ:
+                    queryWrapper.eq(Picture::getPicWidth, picWidth);
+                    break;
+            }
+            // queryWrapper.eq(Picture::getPicWidth, queryRequest.getPicWidth());
+        }
+        // 图片高度，动态匹配
         if (queryRequest.getPicHeight() != null) {
-            queryWrapper.eq(Picture::getPicHeight, queryRequest.getPicHeight());
+            Integer picHeight = queryRequest.getPicHeight();
+            switch (whTypeEnum) {
+                case GT:
+                    queryWrapper.gt(Picture::getPicHeight, picHeight);
+                    break;
+                case LT:
+                    queryWrapper.lt(Picture::getPicHeight, picHeight);
+                    break;
+                case EQ:
+                    queryWrapper.eq(Picture::getPicHeight, picHeight);
+                    break;
+            }
+            // queryWrapper.eq(Picture::getPicHeight, queryRequest.getPicHeight());
         }
         // 图片长宽比，等值匹配
         if (queryRequest.getPicScale() != null) {
@@ -552,6 +582,16 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         // 图片类型，等值匹配
         if (StrUtil.isNotBlank(queryRequest.getPicFormat())) {
             queryWrapper.eq(Picture::getPicFormat, queryRequest.getPicFormat());
+        }
+        // 起始编辑时间
+        Date startEditTime = queryRequest.getStartEditTime();
+        if (!ObjectUtils.isEmpty(startEditTime)) {
+            queryWrapper.ge(Picture::getEditTime, startEditTime);
+        }
+        // 结束编辑时间
+        Date endEditTime = queryRequest.getEndEditTime();
+        if (!ObjectUtils.isEmpty(endEditTime)) {
+            queryWrapper.lt(Picture::getEditTime, endEditTime);
         }
         // 排序
         if (StrUtil.isNotBlank(queryRequest.getSortField())) {

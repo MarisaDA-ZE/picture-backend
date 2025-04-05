@@ -6,6 +6,7 @@ import lombok.EqualsAndHashCode;
 import lombok.ToString;
 
 import java.io.Serializable;
+import java.util.Date;
 import java.util.List;
 
 /**
@@ -80,6 +81,12 @@ public class PictureQueryRequest extends PageRequest implements Serializable {
     private Integer picHeight;
 
     /**
+     * 宽高匹配方式
+     * <p>大于、小于、等于</p>
+     */
+    private String whType;
+
+    /**
      * 图片长宽比
      */
     private Double picScale;
@@ -103,4 +110,15 @@ public class PictureQueryRequest extends PageRequest implements Serializable {
      * 审核员ID
      */
     private Long reviewerId;
+
+    /**
+     * 开始编辑时间
+     */
+    private Date startEditTime;
+
+    /**
+     * 结束编辑时间
+     */
+    private Date endEditTime;
+
 }
