@@ -1,6 +1,8 @@
 package cloud.marisa.picturebackend.controller.picture;
 
 import cloud.marisa.picturebackend.annotations.AuthCheck;
+import cloud.marisa.picturebackend.api.imagesearch.ImageSearchApiFacade;
+import cloud.marisa.picturebackend.api.imagesearch.entity.ImageSearchResult;
 import cloud.marisa.picturebackend.common.MrsResult;
 import cloud.marisa.picturebackend.entity.dao.Picture;
 import cloud.marisa.picturebackend.entity.dao.Space;
@@ -330,6 +332,40 @@ public class PictureController {
         int offset = RandomUtil.randomInt(0, 300);
         redisTemplate.opsForValue().set(hashKey, cacheJSON, 300 + offset, TimeUnit.SECONDS);
         return MrsResult.ok(voPage);
+    }
+
+    /**
+     * 以图搜图接口
+     *
+     * @param pictureRequest 源图请求参数的DTO封装
+     * @return 相似图列表
+     */
+    @PostMapping("/search/picture")
+    public MrsResult<?> searchPictureByPicture(
+            @RequestBody SearchPictureByPictureRequest pictureRequest,
+            HttpServletRequest httpServletRequest) {
+        if (pictureRequest == null ||
+                pictureRequest.getPictureId() == null ||
+                pictureRequest.getPictureId() <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        Long pictureId = pictureRequest.getPictureId();
+        Picture dbPicture = pictureService.getById(pictureId);
+        if (dbPicture == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "图片不存在");
+        }
+        Long spaceId = dbPicture.getSpaceId();
+        // 图片空间ID不为空，说明是私有图片
+        // 搜图也只能让图片所有者访问
+        if (spaceId != null) {
+            Long userId = dbPicture.getUserId();
+            User loginUser = userService.getLoginUser(httpServletRequest);
+            if (!loginUser.getId().equals(userId)) {
+                throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
+            }
+        }
+        List<ImageSearchResult> imageSearchResults = ImageSearchApiFacade.searchImageByURL(dbPicture.getUrl());
+        return MrsResult.ok(imageSearchResults);
     }
 
     /**
