@@ -3,6 +3,7 @@ package cloud.marisa.picturebackend.controller.picture;
 import cloud.marisa.picturebackend.annotations.AuthCheck;
 import cloud.marisa.picturebackend.common.MrsResult;
 import cloud.marisa.picturebackend.entity.dao.Picture;
+import cloud.marisa.picturebackend.entity.dao.Space;
 import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.entity.dto.common.DeleteRequest;
 import cloud.marisa.picturebackend.entity.dto.picture.*;
@@ -11,16 +12,16 @@ import cloud.marisa.picturebackend.enums.ReviewStatus;
 import cloud.marisa.picturebackend.enums.UserRole;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
+import cloud.marisa.picturebackend.exception.ThrowUtils;
 import cloud.marisa.picturebackend.service.IPictureService;
+import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.service.IUserService;
 import cloud.marisa.picturebackend.util.SessionUtil;
 import cn.hutool.core.util.RandomUtil;
-import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.util.DigestUtils;
@@ -34,8 +35,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
-import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static cloud.marisa.picturebackend.common.Constants.MAX_PAGE_SIZE;
@@ -52,10 +53,13 @@ import static cloud.marisa.picturebackend.common.Constants.PICTURE_CACHE_PREFIX;
 public class PictureController {
 
     @Autowired
+    private IUserService userService;
+
+    @Autowired
     private IPictureService pictureService;
 
     @Autowired
-    private IUserService userService;
+    private ISpaceService spaceService;
 
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
@@ -188,21 +192,8 @@ public class PictureController {
         if (updateRequest == null || updateRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        Picture picture = new Picture();
-        BeanUtils.copyProperties(updateRequest, picture);
-        picture.setTags(JSONUtil.toJsonStr(updateRequest.getTags()));
-        // 校验数据
-        pictureService.validPicture(picture);
-        // 检查是否存在
-        Picture oldPicture = pictureService.getById(picture.getId());
-        if (oldPicture == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
-        }
-        boolean updated = pictureService.updateById(picture);
-        if (!updated) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR);
-        }
-        return MrsResult.ok(picture.getId());
+        Long pictureId = pictureService.updatePicture(updateRequest);
+        return MrsResult.ok(pictureId);
     }
 
     /**
@@ -232,15 +223,11 @@ public class PictureController {
      * @return 图片VO
      */
     @GetMapping("/get/vo")
-    public MrsResult<?> getPictureVoById(@RequestParam(name = "id") Long pid) {
+    public MrsResult<?> getPictureVoById(@RequestParam(name = "id") Long pid, HttpServletRequest httpServletRequest) {
         if (pid == null || pid <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        Picture picture = pictureService.getById(pid);
-        if (picture == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
-        }
-        PictureVo pictureVo = pictureService.getPictureVo(picture);
+        PictureVo pictureVo = pictureService.getPictureVo(pid, httpServletRequest);
         return MrsResult.ok(pictureVo);
     }
 
@@ -276,7 +263,21 @@ public class PictureController {
         if (size > MAX_PAGE_SIZE) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "分页参数过大");
         }
-        queryRequest.setReviewStatus(ReviewStatus.PASS.getValue());
+        Long spaceId = queryRequest.getSpaceId();
+        if (spaceId == null) {
+            // 公共空间
+            queryRequest.setNullSpaceId(true);
+            queryRequest.setReviewStatus(ReviewStatus.PASS.getValue());
+        } else {
+            // 私有空间
+            queryRequest.setNullSpaceId(false);
+            User loggedUser = userService.getLoginUser(httpServletRequest);
+            Space space = spaceService.getById(spaceId);
+            ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND, "空间不存在");
+            if (!Objects.equals(space.getUserId(), loggedUser.getId())) {
+                throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
+            }
+        }
         Page<Picture> picturePage = pictureService.getPicturePage(queryRequest);
         Page<PictureVo> voPage = pictureService.getPictureVoPage(picturePage, httpServletRequest);
         return MrsResult.ok(voPage);
@@ -329,8 +330,6 @@ public class PictureController {
         int offset = RandomUtil.randomInt(0, 300);
         redisTemplate.opsForValue().set(hashKey, cacheJSON, 300 + offset, TimeUnit.SECONDS);
         return MrsResult.ok(voPage);
-
-
     }
 
     /**
@@ -345,32 +344,9 @@ public class PictureController {
         if (editRequest == null || editRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        if (StrUtil.isBlank(editRequest.getName())) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR, "图片名称不能为空");
-        }
-        Picture picture = new Picture();
-        BeanUtils.copyProperties(editRequest, picture);
-        picture.setTags(JSONUtil.toJsonStr(editRequest.getTags()));
-        picture.setEditTime(new Date());
-        User loginedUser = userService.getLoginUser(servletRequest);
-        // 校验图片参数
-        pictureService.validPicture(picture);
-        // 填充审核信息
-        pictureService.fillReviewParams(picture, loginedUser);
-        Picture dbPicture = pictureService.getById(editRequest.getId());
-        if (dbPicture == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
-        }
-        // 只有管理员或者图片拥有者才能编辑
-        if (!dbPicture.getUserId().equals(loginedUser.getId())
-                && !userService.hasPermission(loginedUser, UserRole.ADMIN)) {
-            throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR);
-        }
-        boolean updated = pictureService.updateById(picture);
-        if (!updated) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR);
-        }
-        return MrsResult.ok(picture.getId());
+        User loginUser = userService.getLoginUser(servletRequest);
+        Long pictureId = pictureService.editPicture(editRequest, loginUser);
+        return MrsResult.ok(pictureId);
     }
 
     /**

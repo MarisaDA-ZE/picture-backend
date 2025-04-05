@@ -6,7 +6,9 @@ import lombok.ToString;
 import org.springframework.beans.BeanUtils;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 
 /**
  * 空间表
@@ -37,6 +39,13 @@ public class SpaceVo implements Serializable {
      * 空间等级（0-普通版、1-专业版、2-旗舰版）
      */
     private Integer spaceLevel;
+    // 这俩一样的，前端叫spaceType
+    private Integer spaceType;
+
+    /**
+     * 权限操作列表
+     */
+    private List<String> permissionList;
 
     /**
      * 最大存储空间（Byte）
@@ -90,6 +99,10 @@ public class SpaceVo implements Serializable {
         }
         SpaceVo spaceVo = new SpaceVo();
         BeanUtils.copyProperties(space, spaceVo);
+        // 0 私有空间，1 团队空间，2 不知道，不显示，应该不是spaceLevel
+        // spaceVo.setSpaceType(space.getSpaceLevel());
+        spaceVo.setSpaceType(0);
+        spaceVo.setPermissionList(getPermissions());
         return spaceVo;
     }
 
@@ -106,5 +119,21 @@ public class SpaceVo implements Serializable {
         Space space = new Space();
         BeanUtils.copyProperties(spaceVo, space);
         return space;
+    }
+
+    /**
+     * 前端用的权限列表
+     * <p>根据前端枚举出来的（气</p>
+     *
+     * @return .
+     */
+    private static List<String> getPermissions() {
+        ArrayList<String> permissions = new ArrayList<>();
+        // permissions.add("spaceUser:manage");
+        permissions.add("picture:view");
+        permissions.add("picture:upload");
+        permissions.add("picture:edit");
+        permissions.add("picture:delete");
+        return permissions;
     }
 }

@@ -51,7 +51,6 @@ public abstract class PictureUploadTemplate {
         // 校验文件信息
         validPicture(inputSource);
         UploadPictureResult result = new UploadPictureResult();
-        result.setPicSize(getPictureSize(inputSource));
         String fileName = getOriginalFilename(inputSource);
         String compressSuffix = pictureConfig.getCompressImageType();
         // 处理上传后的文件名
@@ -136,7 +135,7 @@ public abstract class PictureUploadTemplate {
      * @param inputSource 输入源
      * @return 结果
      */
-    protected abstract Long getPictureSize(Object inputSource);
+    public abstract Long getPictureSize(Object inputSource);
 
     /**
      * 生成文件名、保存路径等信息

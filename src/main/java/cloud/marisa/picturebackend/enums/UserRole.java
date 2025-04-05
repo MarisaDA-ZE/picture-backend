@@ -13,21 +13,34 @@ public enum UserRole implements MrsBaseEnum<String> {
 
     /**
      * 被封禁的用户
+     * <p>可以：</p>
+     * <p>①浏览、下载公共图片库的图片</p>
      */
     BAN("ban", -1),
 
     /**
      * 游客（或未登录的访问）
+     * <p>可以：</p>
+     * <p>①浏览、下载公共图片库的图片</p>
      */
     GUEST("guest", 1),
 
     /**
-     * 用户
+     * 用户角色
+     * <p>可以：</p>
+     * <p>①浏览、下载、分享公共图片库的图片</p>
+     * <p>②管理自己的图片库数据</p>
+     * <p>③管理公共图片库自己上传的、通过审核的数据</p>
      */
     USER("user", 2),
 
     /**
-     * 管理员
+     * 管理员角色
+     * <p>可以：</p>
+     * <p>①浏览、下载、分享公共图片库的图片</p>
+     * <p>②管理自己的图片库数据</p>
+     * <p>③管理公共图片库的数据</p>
+     * <p>④审核用户上传（公共库和私有库）的图片</p>
      */
     ADMIN("admin", 5);
 
@@ -36,9 +49,35 @@ public enum UserRole implements MrsBaseEnum<String> {
         this.value = value;
     }
 
-    /** 字符串值 */
+    /**
+     * 字符串值
+     */
     private final String value;
 
-    /** 角色等级，等级越高权限越大 */
+    /**
+     * 角色等级，等级越高权限越大
+     */
     private final Integer level;
+
+    /**
+     * 当前角色权限 ≥ 指定角色权限
+     *
+     * @param mustRole 需要的权限
+     * @return true:大于等于，false:小于
+     */
+    public boolean moreThanRole(UserRole mustRole) {
+        if (mustRole == null) {
+            return false;
+        }
+        return this.getLevel() >= mustRole.getLevel();
+    }
+
+    /**
+     * 当前角色权限＜指定角色权限
+     * @param mustRole  需要的权限
+     * @return  true:比需要权限小，false:比需要权限大
+     */
+    public boolean notThanRole(UserRole mustRole) {
+        return !moreThanRole(mustRole);
+    }
 }

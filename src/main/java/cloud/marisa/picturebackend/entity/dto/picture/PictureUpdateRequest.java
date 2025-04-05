@@ -27,6 +27,11 @@ public class PictureUpdateRequest implements Serializable {
     private String name;
 
     /**
+     * 空间ID
+     */
+    private Long spaceId;
+
+    /**
      * 图片描述
      */
     private String introduction;

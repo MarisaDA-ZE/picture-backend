@@ -67,6 +67,6 @@ public class SessionUtil {
         if (currentRole == null) {
             return false;
         }
-        return currentRole.getLevel() >= hasRole.getLevel();
+        return currentRole.moreThanRole(hasRole);
     }
 }

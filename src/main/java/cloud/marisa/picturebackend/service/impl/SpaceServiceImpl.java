@@ -2,9 +2,14 @@ package cloud.marisa.picturebackend.service.impl;
 
 import cloud.marisa.picturebackend.entity.dao.Space;
 import cloud.marisa.picturebackend.entity.dao.User;
+import cloud.marisa.picturebackend.entity.dto.common.DeleteRequest;
 import cloud.marisa.picturebackend.entity.dto.space.SpaceAddRequest;
+import cloud.marisa.picturebackend.entity.dto.space.SpaceQueryRequest;
 import cloud.marisa.picturebackend.entity.dto.space.SpaceUpdateRequest;
-import cloud.marisa.picturebackend.enums.SpaceLevel;
+import cloud.marisa.picturebackend.entity.vo.SpaceVo;
+import cloud.marisa.picturebackend.entity.vo.UserVo;
+import cloud.marisa.picturebackend.enums.SortEnum;
+import cloud.marisa.picturebackend.enums.SpaceLevelEnum;
 import cloud.marisa.picturebackend.enums.UserRole;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
@@ -12,7 +17,11 @@ import cloud.marisa.picturebackend.mapper.SpaceMapper;
 import cloud.marisa.picturebackend.service.IUserService;
 import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.util.EnumUtil;
+import cloud.marisa.picturebackend.util.MrsAuthUtil;
 import cn.hutool.core.util.StrUtil;
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -20,8 +29,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.ObjectUtils;
 
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * @author Marisa
@@ -41,6 +51,50 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
     private final Map<Long, Object> locksMap = new ConcurrentHashMap<>();
 
     @Override
+    public Page<Space> getSpacePage(SpaceQueryRequest queryRequest, User loggedUser) {
+        int current = queryRequest.getCurrent();
+        int size = queryRequest.getPageSize();
+        LambdaQueryWrapper<Space> queryWrapper = getQueryWrapper(queryRequest, loggedUser);
+        return this.page(new Page<>(current, size), queryWrapper);
+    }
+
+    @Override
+    public Page<SpaceVo> getSpacePageVo(Page<Space> spacePage, User loggedUser) {
+        long size = spacePage.getSize();
+        long current = spacePage.getCurrent();
+        long total = spacePage.getTotal();
+
+        Long userId = loggedUser.getId();
+        UserRole userRole = EnumUtil.fromValue(loggedUser.getUserRole(), UserRole.class);
+        Page<SpaceVo> voPage = new Page<>(current, size, total);
+        List<Space> records = spacePage.getRecords();
+        Set<Long> ids = records.stream()
+                .map(Space::getUserId)
+                .collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            voPage.setRecords(new ArrayList<>());
+            return voPage;
+        }
+        Map<Long, List<UserVo>> userVos = userService.listByIds(ids)
+                .stream().map(User::toVO)
+                .collect(Collectors.groupingBy(userVo -> (userVo != null) ? userVo.getId() : -1));
+        List<SpaceVo> spaceVos = records.stream().map(space -> {
+            SpaceVo vo = SpaceVo.toVo(space);
+            Long spaceUserId = space.getUserId();
+            if (userVos.containsKey(spaceUserId)) {
+                vo.setUser(userVos.get(space.getUserId()).get(0));
+            } else {
+                vo.setUser(null);
+            }
+            List<String> permissions = MrsAuthUtil.getPermissions(spaceUserId, userId, userRole);
+            vo.setPermissionList(permissions);
+            return vo;
+        }).collect(Collectors.toList());
+        voPage.setRecords(spaceVos);
+        return voPage;
+    }
+
+    @Override
     public boolean updateSpace(SpaceUpdateRequest updateRequest) {
         Space space = new Space();
         BeanUtils.copyProperties(updateRequest, space);
@@ -50,6 +104,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         if (sid == null || sid < 0) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "空间不存在");
         }
+        // 判断空间是否存在
         boolean exists = this.lambdaQuery().eq(Space::getId, sid).exists();
         if (!exists) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "空间不存在");
@@ -65,12 +120,13 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
     public long addSpace(SpaceAddRequest addRequest, User loggedUser) {
         Space space = new Space();
         BeanUtils.copyProperties(addRequest, space);
+        space.setUserId(loggedUser.getId());
         if (StrUtil.isBlank(addRequest.getSpaceName())) {
             space.setSpaceName("未命名空间");
         }
-        SpaceLevel spaceLevel = EnumUtil.fromValue(addRequest.getSpaceLevel(), SpaceLevel.class);
-        if (spaceLevel == null) {
-            space.setSpaceLevel(SpaceLevel.COMMON.getValue());
+        SpaceLevelEnum spaceLevelEnum = EnumUtil.fromValue(addRequest.getSpaceLevel(), SpaceLevelEnum.class);
+        if (spaceLevelEnum == null) {
+            space.setSpaceLevel(SpaceLevelEnum.COMMON.getValue());
         }
         fillSpaceBySpaceLevel(space);
         validSpace(space, true);
@@ -81,7 +137,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         // 管理员用户  -> 所有空间
         boolean isUser = userService.hasPermission(loggedUser, UserRole.USER);
         boolean isAdmin = userService.hasPermission(loggedUser, UserRole.ADMIN);
-        if (!isUser || (spaceLevel != SpaceLevel.COMMON && !isAdmin)) {
+        if (!isUser || (spaceLevelEnum != SpaceLevelEnum.COMMON && !isAdmin)) {
             throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "暂无权限");
         }
         Object lock = locksMap.computeIfAbsent(uid, k -> new Object());
@@ -89,7 +145,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
         synchronized (lock) {
             try {
                 // 开启一个事务
-                transactionTemplate.execute(status -> {
+                Long sid = transactionTemplate.execute(status -> {
                     boolean exists = this.lambdaQuery().eq(Space::getUserId, uid).exists();
                     if (exists) {
                         throw new BusinessException(ErrorCode.OPERATION_ERROR, "用户只能创建一个空间");
@@ -100,7 +156,7 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
                     }
                     return space.getId();
                 });
-                return -1L;
+                return (sid != null) ? sid : -1L;
             } finally {
                 locksMap.remove(uid);
             }
@@ -109,16 +165,34 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
 
     @Override
     public void fillSpaceBySpaceLevel(Space space) {
-        SpaceLevel spaceLevel = EnumUtil.fromValue(space.getSpaceLevel(), SpaceLevel.class);
-        if (spaceLevel == null) {
+        SpaceLevelEnum spaceLevelEnum = EnumUtil.fromValue(space.getSpaceLevel(), SpaceLevelEnum.class);
+        if (spaceLevelEnum == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "未知的空间类型");
         }
         if (space.getMaxCount() == null) {
-            space.setMaxCount(spaceLevel.getMaxCount());
+            space.setMaxCount(spaceLevelEnum.getMaxCount());
         }
         if (space.getMaxSize() == null) {
-            space.setMaxSize(spaceLevel.getMaxSize());
+            space.setMaxSize(spaceLevelEnum.getMaxSize());
         }
+    }
+
+    @Override
+    public boolean deleteSpaceById(DeleteRequest deleteRequest, User loggedUser) {
+        Long spaceId = deleteRequest.getId();
+        if (spaceId == null || spaceId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        Space space = this.getById(spaceId);
+        if (space == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "空间不存在");
+        }
+        Long userId = loggedUser.getId();
+        boolean isAdmin = userService.hasPermission(loggedUser, UserRole.ADMIN);
+        if (!Objects.equals(space.getUserId(), userId) && !isAdmin) {
+            throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
+        }
+        return this.removeById(spaceId);
     }
 
     /**
@@ -132,23 +206,96 @@ public class SpaceServiceImpl extends ServiceImpl<SpaceMapper, Space>
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         String spaceName = space.getSpaceName();
-        SpaceLevel spaceLevel = EnumUtil.fromValue(space.getSpaceLevel(), SpaceLevel.class);
+        SpaceLevelEnum spaceLevelEnum = EnumUtil.fromValue(space.getSpaceLevel(), SpaceLevelEnum.class);
         // TODO:感觉这里的逻辑有点问题？但鱼哥是这么写的
         // 需要创建空间
         if (isCreate) {
             if (StrUtil.isBlank(spaceName)) {
                 throw new BusinessException(ErrorCode.PARAMS_ERROR, "空间名称不能为空");
             }
-            if (spaceLevel == null) {
+            if (spaceLevelEnum == null) {
                 throw new BusinessException(ErrorCode.PARAMS_ERROR, "未知的空间类型");
             }
         }
         // 需要修改空间
-        if (space.getSpaceLevel() != null && spaceLevel == null) {
+        if (space.getSpaceLevel() != null && spaceLevelEnum == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "未知的空间类型");
         }
         if (StrUtil.isNotBlank(spaceName) && spaceName.length() > 32) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "空间名称过长");
+        }
+    }
+
+    LambdaQueryWrapper<Space> getQueryWrapper(SpaceQueryRequest queryRequest, User loggedUser) {
+        LambdaQueryWrapper<Space> queryWrapper = new LambdaQueryWrapper<>();
+        // 空间ID，等值匹配
+        Long spaceId = queryRequest.getId();
+        if (spaceId != null && spaceId > 0) {
+            queryWrapper.eq(Space::getId, spaceId);
+        }
+
+        boolean isAdmin = userService.hasPermission(loggedUser, UserRole.ADMIN);
+        // 管理员可以查所有人的
+        if (isAdmin) {
+            // 用户ID，等值匹配
+            Long userId = queryRequest.getUserId();
+            if (userId != null && userId > 0) {
+                queryWrapper.eq(Space::getUserId, userId);
+            }
+        } else {
+            // 用户只能查自己的
+            queryWrapper.eq(Space::getUserId, loggedUser.getId());
+        }
+
+
+        // 空间名称，模糊匹配
+        String spaceName = queryRequest.getSpaceName();
+        if (StrUtil.isNotBlank(spaceName)) {
+            queryWrapper.like(Space::getSpaceName, spaceName);
+        }
+        // 空间类型，等值匹配
+        Integer spaceLevel = queryRequest.getSpaceLevel();
+        if (spaceLevel != null) {
+            queryWrapper.eq(Space::getSpaceLevel, spaceLevel);
+        }
+        // 排序字段
+        String sortField = queryRequest.getSortField();
+        if (StrUtil.isNotBlank(sortField)) {
+            SortEnum sortType = EnumUtil.fromValue(queryRequest.getSortOrder(), SortEnum.class);
+            boolean isAsc = sortType == SortEnum.ASC;
+            queryWrapper.orderBy(true, isAsc, getSortField(queryRequest.getSortField()));
+        }
+        return queryWrapper;
+    }
+
+    /**
+     * 获取可排序字段
+     *
+     * @param sortField 字段名
+     * @return 对应的字段
+     */
+    private SFunction<Space, ?> getSortField(String sortField) {
+        switch (sortField) {
+            case "spaceName":
+                return Space::getSpaceName;
+            case "spaceLevel":
+                return Space::getSpaceLevel;
+            case "maxSize":
+                return Space::getMaxSize;
+            case "maxCount":
+                return Space::getMaxCount;
+            case "totalCount":
+                return Space::getTotalCount;
+            case "totalSize":
+                return Space::getTotalSize;
+            case "createTime":
+                return Space::getCreateTime;
+            case "updateTime":
+                return Space::getUpdateTime;
+            case "editTime":
+                return Space::getEditTime;
+            default:
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "未知的排序字段");
         }
     }
 }

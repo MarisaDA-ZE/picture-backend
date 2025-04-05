@@ -2,7 +2,6 @@ package cloud.marisa.picturebackend.aop;
 
 import cloud.marisa.picturebackend.annotations.AuthCheck;
 import cloud.marisa.picturebackend.entity.dao.User;
-import cloud.marisa.picturebackend.entity.vo.UserVo;
 import cloud.marisa.picturebackend.enums.UserRole;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
@@ -62,8 +61,8 @@ public class AuthInterceptor {
             throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR);
         }
 
-        // 权限不足
-        if (mustRole.getLevel() > currentRole.getLevel()) {
+        // 权限不足(current < must)
+        if (currentRole.notThanRole(mustRole)) {
             throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR);
         }
 

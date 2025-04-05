@@ -8,25 +8,26 @@ import lombok.Getter;
  * @date 2025/4/4
  */
 @Getter
-public enum SpaceLevel implements MrsBaseEnum<Integer> {
+public enum SpaceLevelEnum implements MrsBaseEnum<Integer> {
 
     /**
      * 普通版
      */
-    COMMON(0, 200, 200 * 1024 * 1024L),
+    COMMON(0, "普通版", 200, 200 * 1024 * 1024L),
 
     /**
      * 专业版
      */
-    PROFESSIONAL(1, 500, 1000 * 1024 * 1024L),
+    PROFESSIONAL(1, "专业版", 500, 500 * 1024 * 1024L),
 
     /**
      * 旗舰版
      */
-    FLAGSHIP(2, 1000, 2000 * 1024 * 1024L);
+    FLAGSHIP(2, "旗舰版", 1000, 1000 * 1024 * 1024L);
 
-    SpaceLevel(Integer value, Integer maxCount, Long maxSize) {
+    SpaceLevelEnum(Integer value, String text, Integer maxCount, Long maxSize) {
         this.value = value;
+        this.text = text;
         this.maxCount = maxCount;
         this.maxSize = maxSize;
     }
@@ -35,6 +36,11 @@ public enum SpaceLevel implements MrsBaseEnum<Integer> {
      * 枚举类型
      */
     private final Integer value;
+
+    /**
+     * 类型描述
+     */
+    private final String text;
 
     /**
      * 最大存储数量

@@ -76,7 +76,7 @@ public class PictureMultipartFileUpload extends PictureUploadTemplate {
     }
 
     @Override
-    protected Long getPictureSize(Object inputSource) {
+    public Long getPictureSize(Object inputSource) {
         if (inputSource == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }

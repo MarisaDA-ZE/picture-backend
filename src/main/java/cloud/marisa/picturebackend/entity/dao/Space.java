@@ -60,10 +60,16 @@ public class Space implements Serializable {
     private Integer maxCount;
 
     /**
-     * 空间创建者
+     * 已使用的存储空间（Byte）
      */
-    @TableField("create_by")
-    private Long createBy;
+    @TableField("total_size")
+    private Long totalSize;
+
+    /**
+     * 已使用的存储数量（张）
+     */
+    @TableField("total_count")
+    private Integer totalCount;
 
     /**
      * 创建时间

@@ -3,10 +3,7 @@ package cloud.marisa.picturebackend.service;
 import cloud.marisa.picturebackend.entity.dao.Picture;
 import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.entity.dto.common.DeleteRequest;
-import cloud.marisa.picturebackend.entity.dto.picture.PictureQueryRequest;
-import cloud.marisa.picturebackend.entity.dto.picture.PictureReviewRequest;
-import cloud.marisa.picturebackend.entity.dto.picture.PictureUploadBatchRequest;
-import cloud.marisa.picturebackend.entity.dto.picture.PictureUploadRequest;
+import cloud.marisa.picturebackend.entity.dto.picture.*;
 import cloud.marisa.picturebackend.entity.vo.PictureVo;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
@@ -51,6 +48,23 @@ public interface IPictureService extends IService<Picture> {
     Integer uploadPictureBatch(PictureUploadBatchRequest uploadBatchRequest, User loggedUser);
 
     /**
+     * 用户更新图片信息
+     *
+     * @param editRequest 更新参数的DTO封装
+     * @param loggedUser  登录用户
+     * @return 的图片ID
+     */
+    Long editPicture(PictureEditRequest editRequest, User loggedUser);
+
+    /**
+     * 管理员更新图片信息
+     *
+     * @param updateRequest 更新参数的DTO封装
+     * @return 图片的ID
+     */
+    Long updatePicture(PictureUpdateRequest updateRequest);
+
+    /**
      * 下载一张图片
      * <p>这个方法只能用于下载"pictures"目录下的图片</p>
      *
@@ -71,10 +85,11 @@ public interface IPictureService extends IService<Picture> {
     /**
      * 图片DAO转VO
      *
-     * @param picture 图片DAO对象
+     * @param pid                图片ID
+     * @param httpServletRequest httpServlet请求对象
      * @return 图片VO对象
      */
-    PictureVo getPictureVo(Picture picture);
+    PictureVo getPictureVo(Long pid, HttpServletRequest httpServletRequest);
 
     /**
      * 获取图片信息（分页）
@@ -116,4 +131,12 @@ public interface IPictureService extends IService<Picture> {
      * @param loginUser 登录用户对象
      */
     void fillReviewParams(Picture picture, User loginUser);
+
+    /**
+     * 校验用户是否有操作该图片的权限
+     *
+     * @param picture   图片
+     * @param loginUser 登录用户
+     */
+    void checkPictureAuth(Picture picture, User loginUser);
 }

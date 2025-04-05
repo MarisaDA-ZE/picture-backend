@@ -1,4 +1,4 @@
-package cloud.marisa.picturebackend.controller;
+package cloud.marisa.picturebackend.controller.health;
 
 import cloud.marisa.picturebackend.common.MrsResult;
 import org.springframework.web.bind.annotation.RequestMapping;

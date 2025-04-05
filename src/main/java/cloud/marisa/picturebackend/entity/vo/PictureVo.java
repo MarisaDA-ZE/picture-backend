@@ -1,6 +1,9 @@
 package cloud.marisa.picturebackend.entity.vo;
 
 import cloud.marisa.picturebackend.entity.dao.Picture;
+import cloud.marisa.picturebackend.entity.dao.User;
+import cloud.marisa.picturebackend.enums.UserRole;
+import cloud.marisa.picturebackend.util.EnumUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import lombok.Data;
@@ -9,8 +12,10 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.util.ObjectUtils;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * @author MarisaDAZE
@@ -55,6 +60,11 @@ public class PictureVo implements Serializable {
      * 图片名称
      */
     private String name;
+
+    /**
+     * 权限操作列表
+     */
+    private List<String> permissionList;
 
     /**
      * 图片描述
