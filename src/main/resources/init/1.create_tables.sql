@@ -50,6 +50,11 @@ CREATE TABLE IF NOT EXISTS picture (
     `pic_size` bigint NULL DEFAULT NULL COMMENT '图片大小',
     `pic_width` int NULL DEFAULT NULL COMMENT '图片宽度',
     `pic_height` int NULL DEFAULT NULL COMMENT '图片高度',
+    `pic_color` varchar(16) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '图片主色调（r,g,b）',
+    `m_color_hue` float NULL DEFAULT NULL COMMENT '主要颜色的色调（0~360°）',
+    `m_color_saturation` float NULL DEFAULT NULL COMMENT '主要颜色的饱和度（0~100°）',
+    `m_color_value` float NULL DEFAULT NULL COMMENT '主要颜色的明度（0~100°）',
+    `m_hue_bucket` tinyint NULL DEFAULT NULL COMMENT '主色调分桶量（每10°一个桶，共36个）',
     `pic_scale` double NULL DEFAULT NULL COMMENT '图片长宽比',
     `pic_format` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NULL DEFAULT NULL COMMENT '图片格式',
     `review_status` tinyint NULL DEFAULT 0 COMMENT '审核状态（0:待审核，1:已通过，2:已拒绝）',
@@ -69,10 +74,11 @@ CREATE TABLE IF NOT EXISTS picture (
     INDEX `idx_introduction`(`introduction` ASC) USING BTREE COMMENT '图片描述索引',
     INDEX `idx_review_status`(`review_status` ASC) USING BTREE COMMENT '审核状态索引',
     INDEX `idx_reviewer_id`(`reviewer_id` ASC) USING BTREE COMMENT '审核员ID索引',
-    INDEX `idx_fingerprint`(`fingerprint` ASC) USING BTREE COMMENT '文件指纹索引'
+    INDEX `idx_fingerprint`(`fingerprint` ASC) USING BTREE COMMENT '文件指纹索引',
+    INDEX `idx_m_hue_bucket`(`m_hue_bucket` ASC) USING BTREE COMMENT '主色调分量索引'
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '图片表' ROW_FORMAT = Dynamic;
 
--- 图片表 --
+-- 空间表 --
 CREATE TABLE IF NOT EXISTS space (
     `id` bigint NOT NULL COMMENT '主键ID',
     `user_id` bigint NOT NULL COMMENT '所属用户ID',

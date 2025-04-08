@@ -46,6 +46,9 @@ public class UploadPictureResult implements Serializable {
      */
     private String originalPath;
 
+    /**
+     * 文件指纹
+     */
     private String md5;
 
     /**
@@ -67,6 +70,31 @@ public class UploadPictureResult implements Serializable {
      * 图片高度
      */
     private Integer picHeight;
+
+    /**
+     * 图片主要颜色（r,g,b）
+     */
+    private String picColor;
+
+    /**
+     * 主要颜色的色调（0~360°）
+     */
+    private Float mColorHue;
+
+    /**
+     * 主要颜色的饱和度（0~100°）
+     */
+    private Float mColorSaturation;
+
+    /**
+     * 主要颜色的明度（0~100°）
+     */
+    private Float mColorValue;
+
+    /**
+     * 主色调分桶量（每10°一个桶，共36个）
+     */
+    private Integer mHueBucket;
 
     /**
      * 图片长宽比

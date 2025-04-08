@@ -6,6 +6,8 @@ import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.util.ImageUtil;
 import cloud.marisa.picturebackend.util.MinioUtil;
+import cloud.marisa.picturebackend.util.colors.ColorUtils;
+import cloud.marisa.picturebackend.util.colors.MrsColorHSV;
 import cn.hutool.core.date.DateUtil;
 import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.util.NumberUtil;
@@ -17,6 +19,7 @@ import org.springframework.stereotype.Component;
 
 import javax.imageio.ImageIO;
 import java.awt.image.BufferedImage;
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
@@ -78,7 +81,19 @@ public abstract class PictureUploadTemplate {
             minioUtil.upload(compressed, defaultPath);
             // 上传缩略图
             InputStream thumbnailStream = ImageUtil.createThumbnail(Files.newInputStream(tempFile), THUMB_MAX_SIZE, compressSuffix);
-            minioUtil.upload(thumbnailStream, thumbPath);
+            byte[] thumbnailBytes = thumbnailStream.readAllBytes(); // 缩略图的内存小，通常不会超过100kb，可以允许短暂驻留内存中
+            thumbnailStream.close();
+            minioUtil.upload(new ByteArrayInputStream(thumbnailBytes), thumbPath);
+            // 获取图片主要颜色
+            int[] color = ImageUtil.getDominantColor(new ByteArrayInputStream(thumbnailBytes));
+            String mainColor = String.format("%d,%d,%d", color[0], color[1], color[2]);
+            MrsColorHSV colorHSV = ColorUtils.toHSV(mainColor);
+            result.setPicColor(mainColor);
+            // 主颜色的hsv分量和hue桶号
+            result.setMColorHue(colorHSV.getHue());
+            result.setMColorSaturation(colorHSV.getSaturation());
+            result.setMColorValue(colorHSV.getValue());
+            result.setMHueBucket(colorHSV.getHueBucket());
             // 上传原图
             minioUtil.upload(Files.newInputStream(tempFile), originalPath);
             // 图片指纹

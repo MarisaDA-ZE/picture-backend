@@ -130,6 +130,48 @@ public class Picture implements Serializable {
     private Integer picHeight;
 
     /**
+     * 图片主要颜色（r,g,b）
+     */
+    @TableField("pic_color")
+    private String picColor;
+
+    /**
+     * 主要颜色的色调（0~360°）
+     */
+    @TableField("m_color_hue")
+    private Float mColorHue;
+
+    /**
+     * 主要颜色的饱和度（0~100°）
+     */
+    @TableField("m_color_saturation")
+    private Float mColorSaturation;
+
+    /**
+     * 主要颜色的明度（0~100°）
+     */
+    @TableField("m_color_value")
+    private Float mColorValue;
+
+    /**
+     * 主色调分桶量（每10°一个桶，共36个）
+     */
+    @TableField("m_hue_bucket")
+    private Integer mHueBucket;
+
+    /**
+     * 主要颜色的饱和度桶（每10°一个桶，共10个）
+     */
+    @TableField("m_sat_bucket")
+    private Integer mSaturationBucket;
+
+    /**
+     * 主要颜色的明度桶（每10°一个桶，共10个）
+     */
+    @TableField("m_val_bucket")
+    private Integer mValueBucket;
+
+    /**
      * 图片长宽比
      */
     @TableField("pic_scale")

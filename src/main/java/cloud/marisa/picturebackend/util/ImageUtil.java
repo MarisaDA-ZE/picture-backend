@@ -8,9 +8,14 @@ import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 import java.awt.image.BufferedImage;
 import java.io.*;
+import java.awt.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Iterator;
+import java.io.IOException;
+import java.io.InputStream;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * @author MarisaDAZE
@@ -164,6 +169,94 @@ public class ImageUtil {
     }
 
 
+    // 缩小图片尺寸加速处理（保持宽高比）
+    private static final int TARGET_SIZE = 50;
+
+    public static int[] getDominantColor(InputStream input) throws IOException {
+        BufferedImage image = ImageIO.read(input);
+        if (image == null) {
+            throw new IOException("Unsupported image format or corrupted file");
+        }
+        // 缩小图片尺寸
+        BufferedImage resizedImage = resizeImage(image);
+        // 统计颜色出现频率
+        Map<Integer, Integer> colorCount = new HashMap<>();
+        int width = resizedImage.getWidth();
+        int height = resizedImage.getHeight();
+
+        for (int x = 0; x < width; x++) {
+            for (int y = 0; y < height; y++) {
+                int rgb = resizedImage.getRGB(x, y);
+                // 忽略透明像素
+                if ((rgb >> 24) == 0x00) {
+                    continue;
+                }
+                // 简化颜色精度（按4位精度分组）
+                int simplifiedRGB = simplifyColor(rgb);
+                colorCount.put(simplifiedRGB, colorCount.getOrDefault(simplifiedRGB, 0) + 1);
+            }
+        }
+        // 找到最高频颜色
+        Map.Entry<Integer, Integer> maxEntry = null;
+        for (Map.Entry<Integer, Integer> entry : colorCount.entrySet()) {
+            if (maxEntry == null || entry.getValue() > maxEntry.getValue()) {
+                maxEntry = entry;
+            }
+        }
+        if (maxEntry == null) {
+            return new int[]{0, 0, 0}; // 默认黑色
+        }
+
+        return unpackRGB(maxEntry.getKey());
+    }
+
+    // 简化颜色精度（降低计算复杂度）
+    private static int simplifyColor(int rgb) {
+        int r = (rgb >> 16) & 0xFF;
+        int g = (rgb >> 8) & 0xFF;
+        int b = rgb & 0xFF;
+        // 按4位精度分组（0-255 -> 0-15）
+        r = r >> 4;
+        g = g >> 4;
+        b = b >> 4;
+        return (r << 8) | (g << 4) | b;
+    }
+
+    // 解包为RGB数组
+    private static int[] unpackRGB(int simplified) {
+        int r = (simplified >> 8) & 0xF;
+        int g = (simplified >> 4) & 0xF;
+        int b = simplified & 0xF;
+        // 还原到0-255范围（取中值）
+        return new int[]{
+                (r << 4) + 8,
+                (g << 4) + 8,
+                (b << 4) + 8
+        };
+    }
+
+    // 保持宽高比缩小图片
+    private static BufferedImage resizeImage(BufferedImage original) {
+        int originalWidth = original.getWidth();
+        int originalHeight = original.getHeight();
+        int newWidth = TARGET_SIZE;
+        int newHeight = TARGET_SIZE;
+
+        // 计算保持宽高比的尺寸
+        if (originalWidth > originalHeight) {
+            newHeight = (int) (TARGET_SIZE * ((double) originalHeight / originalWidth));
+        } else {
+            newWidth = (int) (TARGET_SIZE * ((double) originalWidth / originalHeight));
+        }
+        Image scaled = original.getScaledInstance(newWidth, newHeight, Image.SCALE_SMOOTH);
+        BufferedImage resized = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_RGB);
+        Graphics2D g2d = resized.createGraphics();
+        g2d.drawImage(scaled, 0, 0, null);
+        g2d.dispose();
+        return resized;
+    }
+
+
     public static void main(String[] args) {
         String path = "C:\\Users\\Marisa\\Desktop\\thems\\126638656_p0.png";
         // String path = "C:\\Users\\Marisa\\Desktop\\thems\\test.webp";
@@ -172,6 +265,11 @@ public class ImageUtil {
             long current = System.currentTimeMillis();
             InputStream thumbnail = createThumbnail(fis, 1000);
             System.out.println("压缩耗时：" + (System.currentTimeMillis() - current));
+            System.out.println("===================");
+            current = System.currentTimeMillis();
+            int[] color = getDominantColor(thumbnail);
+            System.out.printf("主色调 RGB(%d, %d, %d)\n", color[0], color[1], color[2]);
+            System.out.println("拾色耗时：" + (System.currentTimeMillis() - current));
             thumbnail.close();
         } catch (IOException ex) {
             System.out.println(ex.getMessage());

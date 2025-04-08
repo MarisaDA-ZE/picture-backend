@@ -23,6 +23,8 @@ import cloud.marisa.picturebackend.upload.picture.PictureMultipartFileUpload;
 import cloud.marisa.picturebackend.upload.picture.PictureUploadTemplate;
 import cloud.marisa.picturebackend.upload.picture.PictureUrlUpload;
 import cloud.marisa.picturebackend.util.*;
+import cloud.marisa.picturebackend.util.colors.ColorUtils;
+import cloud.marisa.picturebackend.util.colors.MrsColorHSV;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjUtil;
 import cn.hutool.core.util.StrUtil;
@@ -184,9 +186,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         } else {
             // TODO: 图片秒传功能有点BUG
             // 划分空间后，秒传时还需要将图片拷贝到自己的空间下
-            // 拷贝操作应该是异步进行，但先给用户一个可访问的图片链接
-            // 不然秒传就没有意义了
-            // 但是这里没有做
+            // 这存在开销，但秒传的意义是为了让用户上传大图片时0等待
+            // 那拷贝操作或许应异步进行，先给用户一个可访问的图片链接
+            // 但用户要编辑该怎么办？
+            // Woc，我不知道，鱼哥没讲QwQ
             picture = getPicture(loginUser, records.get(0));
             System.out.println("秒传啦");
             System.out.println("上传耗时: " + (System.currentTimeMillis() - current));
@@ -359,6 +362,12 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         // 原图
         picture.setOriginalPath(uploadResult.getOriginalPath());
         picture.setOriginalUrl(uploadResult.getUrlOriginal());
+        // 颜色信息
+        picture.setPicColor(uploadResult.getPicColor());
+        picture.setMColorHue(uploadResult.getMColorHue());
+        picture.setMColorSaturation(uploadResult.getMColorSaturation());
+        picture.setMColorValue(uploadResult.getMColorValue());
+        picture.setMHueBucket(uploadResult.getMHueBucket());
         // ...
         picture.setMd5(uploadResult.getMd5());
         picture.setPicSize(uploadResult.getPicSize());
@@ -391,6 +400,12 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         // 原图
         picture.setOriginalPath(dbPicture.getOriginalPath());
         picture.setOriginalUrl(dbPicture.getOriginalUrl());
+        // 颜色信息
+        picture.setPicColor(dbPicture.getPicColor());
+        picture.setMColorHue(dbPicture.getMColorHue());
+        picture.setMColorSaturation(dbPicture.getMColorSaturation());
+        picture.setMColorValue(dbPicture.getMColorValue());
+        picture.setMHueBucket(dbPicture.getMHueBucket());
         // ...
         picture.setMd5(dbPicture.getMd5());
         picture.setPicSize(dbPicture.getPicSize());
@@ -593,6 +608,12 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         if (!ObjectUtils.isEmpty(endEditTime)) {
             queryWrapper.lt(Picture::getEditTime, endEditTime);
         }
+        // 近似色查找，范围匹配
+        if (StrUtil.isNotBlank(queryRequest.getPicColor())) {
+            String picColor = queryRequest.getPicColor();
+            applyColorCondition(queryWrapper, picColor, queryRequest.getPicSimilarity());
+        }
+
         // 排序
         if (StrUtil.isNotBlank(queryRequest.getSortField())) {
             SortEnum sortType = EnumUtil.fromValue(queryRequest.getSortOrder(), SortEnum.class);
@@ -707,6 +728,20 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
     }
 
     @Override
+    public List<PictureVo> getPictureByColor(Long spaceId, PictureQueryRequest queryRequest, HttpServletRequest servletRequest) {
+        queryRequest.setSpaceId(spaceId);
+        LambdaQueryWrapper<Picture> queryWrapper = getQueryWrapper(queryRequest);
+        String sql = queryWrapper.getTargetSql();
+        System.out.println("=======================");
+        System.out.println(sql);
+        System.out.println("=======================");
+        // 只要前12条
+        Page<Picture> page = this.page(new Page<>(1, 12), queryWrapper);
+        Page<PictureVo> pictureVoPage = this.getPictureVoPage(page, servletRequest);
+        return pictureVoPage.getRecords();
+    }
+
+    @Override
     public void validPicture(Picture picture) {
         if (ObjUtil.isNull(picture)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -802,5 +837,88 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR);
             }
         }
+    }
+
+
+    /**
+     * 动态添加颜色相似性条件
+     *
+     * @param wrapper     Lambda查询包装器
+     * @param searchColor RGB颜色字符串（如"#FF0000"）
+     * @param similarity  相似度阈值（0~1）
+     */
+    private void applyColorCondition(
+            LambdaQueryWrapper<Picture> wrapper,
+            String searchColor,
+            float similarity
+    ) {
+        if (similarity <= 0 || similarity > 1) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "相似度需在(0,1]之间但实际是 " + similarity);
+        }
+        System.out.println("搜索颜色: " + searchColor);
+        System.out.println("相似度: " + similarity);
+        // Step 1: 转换RGB到HSV和分桶
+        MrsColorHSV colorHSV = ColorUtils.toHSV(searchColor);
+        float hue = colorHSV.getHue();
+        float sat = colorHSV.getSaturation();
+        float vak = colorHSV.getValue();
+        // Step 2: 根据相似度计算允许偏差
+        float hueRange = (1 - similarity) * 360;  // 最大允许色相差
+        float satValRange = (1 - similarity) * 100; // 最大允许饱和度/明度差
+        // Step 3: 确定需要查询的桶范围
+        int hueTolerance = (int) Math.ceil(hueRange / 10); // 每个桶10°
+        List<Integer> hueBuckets = calculateBuckets(hue, hueTolerance);
+        int satTolerance = (int) Math.ceil(satValRange / 10); // 每个桶10%
+        List<Integer> satBuckets = calculateLinearBuckets(colorHSV.getSaturationBucket(), satTolerance);
+        int valTolerance = (int) Math.ceil(satValRange / 10);
+        List<Integer> valBuckets = calculateLinearBuckets(colorHSV.getValueBucket(), valTolerance);
+        System.out.println("色调桶范围: " + hueBuckets.stream().sorted().collect(Collectors.toList()));
+        System.out.println("饱和度范围: " + satBuckets.stream().sorted().collect(Collectors.toList()));
+        System.out.println("明度桶范围: " + valBuckets.stream().sorted().collect(Collectors.toList()));
+        // Step 4: 构建查询条件
+        wrapper
+                // 色调分桶范围过滤
+                .in(Picture::getMHueBucket, hueBuckets)
+                .in(Picture::getMSaturationBucket, satBuckets)
+                .in(Picture::getMValueBucket, valBuckets)
+                // 色调差异范围
+                .apply("ABS(m_color_hue - {0}) <= {1}", hue, hueRange)
+                // 饱和度差异
+                .apply("ABS(m_color_saturation - {0}) <= {1}", sat, satValRange)
+                // 明度差异
+                .apply("ABS(m_color_value - {0}) <= {1}", vak, satValRange);
+        System.out.println("SQL: " + wrapper.getSqlSegment());
+
+    }
+
+    /**
+     * 计算候选桶（处理环形色相）
+     *
+     * @param targetHue 目标色相
+     * @param tolerance 色相容差
+     * @return 桶号
+     */
+    private List<Integer> calculateBuckets(float targetHue, int tolerance) {
+        List<Integer> buckets = new ArrayList<>();
+        int baseBucket = (int) Math.floor(targetHue / 10);
+        for (int i = -tolerance; i <= tolerance; i++) {
+            int bucket = (baseBucket + i + 36) % 36; // 处理负值和溢出
+            buckets.add(bucket);
+        }
+        return buckets;
+    }
+
+    /**
+     * 计算线性分桶（0-9号桶）
+     */
+    private static List<Integer> calculateLinearBuckets(int base, int tolerance) {
+        List<Integer> buckets = new ArrayList<>();
+        for (int i = -tolerance; i <= tolerance; i++) {
+            int bucket = base + i;
+            if (bucket >= 0 && bucket <= 9) {
+                buckets.add(bucket);
+            }
+        }
+        return buckets;
     }
 }

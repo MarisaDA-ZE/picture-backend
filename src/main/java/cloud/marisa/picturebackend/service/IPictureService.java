@@ -11,6 +11,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.InputStream;
+import java.util.List;
 
 /**
  * @author Marisa
@@ -107,6 +108,17 @@ public interface IPictureService extends IService<Picture> {
      * @return VO的分页对象
      */
     Page<PictureVo> getPictureVoPage(Page<Picture> picturePage, HttpServletRequest servletRequest);
+
+    /**
+     * 根据颜色获取最接近的图片
+     * <p>默认前12张</p>
+     *
+     * @param spaceId            空间ID
+     * @param queryRequest       查询对象
+     * @param httpServletRequest httpServlet请求对象
+     * @return 图片列表
+     */
+    List<PictureVo> getPictureByColor(Long spaceId, PictureQueryRequest queryRequest, HttpServletRequest httpServletRequest);
 
     /**
      * 校验图片信息

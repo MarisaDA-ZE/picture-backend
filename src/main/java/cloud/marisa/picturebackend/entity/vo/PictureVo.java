@@ -107,6 +107,10 @@ public class PictureVo implements Serializable {
     private String picFormat;
 
     /**
+     * 图片主要颜色
+     */
+    private String picColor;
+    /**
      * 创建时间
      */
     private Date createTime;

@@ -368,6 +368,15 @@ public class PictureController {
         return MrsResult.ok(imageSearchResults);
     }
 
+    @PostMapping("/search/color")
+    public MrsResult<?> searchPictureByColor(@RequestBody PictureQueryRequest queryRequest, HttpServletRequest request) {
+        ThrowUtils.throwIf(queryRequest == null, ErrorCode.PARAMS_ERROR);
+        Long spaceId = queryRequest.getSpaceId();
+        List<PictureVo> pictureByColor = pictureService.getPictureByColor(spaceId, queryRequest, request);
+        return MrsResult.ok(pictureByColor);
+    }
+
+
     /**
      * 编辑图片
      *

@@ -22,6 +22,13 @@
             <result property="picSize" column="pic_size" jdbcType="BIGINT"/>
             <result property="picWidth" column="pic_width" jdbcType="INTEGER"/>
             <result property="picHeight" column="pic_height" jdbcType="INTEGER"/>
+            <result property="picColor" column="pic_color" jdbcType="VARCHAR"/>
+            <result property="mColorHue" column="m_color_hue" jdbcType="FLOAT"/>
+            <result property="mColorSaturation" column="m_color_saturation" jdbcType="FLOAT"/>
+            <result property="mColorValue" column="m_color_value" jdbcType="FLOAT"/>
+            <result property="mHueBucket" column="m_hue_bucket" jdbcType="TINYINT"/>
+            <result property="mSaturationBucket" column="m_sat_bucket" jdbcType="TINYINT"/>
+            <result property="mValueBucket" column="m_val_bucket" jdbcType="TINYINT"/>
             <result property="picScale" column="pic_scale" jdbcType="DOUBLE"/>
             <result property="picFormat" column="pic_format" jdbcType="VARCHAR"/>
             <result property="reviewStatus" column="review_status" jdbcType="TINYINT"/>
@@ -38,7 +45,9 @@
         id,user_id,space_id,url,url_thumb,url_original,
         name,introduction,fingerprint,saved_path,
         thumb_path,original_path,category,
-        tags,pic_size,pic_width,
+        tags,pic_size,pic_width,pic_color,
+        m_color_hue,m_color_saturation,m_color_value,
+        m_hue_bucket,m_sat_bucket,m_val_bucket,
         pic_height,pic_scale,pic_format,
         review_status,review_message,reviewer_id,
         create_time,update_time,edit_time,review_time,

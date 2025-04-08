@@ -97,6 +97,16 @@ public class PictureQueryRequest extends PageRequest implements Serializable {
     private String picFormat;
 
     /**
+     * 相似颜色
+     */
+    private String picColor;
+
+    /**
+     * 图片相似度
+     */
+    private Float picSimilarity = 0.97f;
+
+    /**
      * 审核状态（0:待审核，1:已通过，2:已拒绝）
      */
     private Integer reviewStatus;
