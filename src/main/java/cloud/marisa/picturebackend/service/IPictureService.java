@@ -58,6 +58,15 @@ public interface IPictureService extends IService<Picture> {
     Long editPicture(PictureEditRequest editRequest, User loggedUser);
 
     /**
+     * 批量修改图片信息
+     *
+     * @param editRequest 批量修改参数的DTO封装
+     * @param loggedUser  当前登录用户
+     * @return 是否修改成功
+     */
+    boolean editPictureBatch(PictureEditBatchRequest editRequest, User loggedUser);
+
+    /**
      * 管理员更新图片信息
      *
      * @param updateRequest 更新参数的DTO封装

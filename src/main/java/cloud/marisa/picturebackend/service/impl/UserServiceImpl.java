@@ -258,8 +258,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         if (StrUtil.isNotBlank(request.getSortField())) {
             SortEnum sortType = EnumUtil.fromValue(request.getSortOrder(), SortEnum.class);
             boolean isAsc = sortType == SortEnum.ASC;
-            // * SFunction<User, ?> lambdaField = FieldUtil.getLambdaField(request.getSortField(), User.class);
-            // * queryWrapper.orderBy(true, isAsc, lambdaField);
             queryWrapper.orderBy(true, isAsc, getSortField(request.getSortField()));
         }
         System.out.println(queryWrapper.getSqlSegment());

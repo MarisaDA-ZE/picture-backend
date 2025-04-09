@@ -395,6 +395,23 @@ public class PictureController {
     }
 
     /**
+     * 批量编辑图片
+     *
+     * @param editRequest    批量编辑图片的DTO封装
+     * @param servletRequest HttpServlet请求对象
+     * @return .
+     */
+    @PostMapping("/edit/batch")
+    public MrsResult<?> editBatchPicture(@RequestBody PictureEditBatchRequest editRequest, HttpServletRequest servletRequest) {
+        User loginUser = userService.getLoginUser(servletRequest);
+        boolean updated = pictureService.editPictureBatch(editRequest, loginUser);
+        if (updated) {
+            return MrsResult.ok("更新成功", true);
+        }
+        return MrsResult.failed();
+    }
+
+    /**
      * 图片信息审核
      * <p>仅管理员可用</p>
      *

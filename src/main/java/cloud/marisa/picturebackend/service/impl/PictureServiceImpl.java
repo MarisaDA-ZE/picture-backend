@@ -39,6 +39,7 @@ import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.ObjectUtils;
 import org.springframework.web.multipart.MultipartFile;
@@ -46,6 +47,8 @@ import org.springframework.web.multipart.MultipartFile;
 import javax.servlet.http.HttpServletRequest;
 import java.io.InputStream;
 import java.util.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.stream.Collectors;
 
 
@@ -75,6 +78,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
     @Autowired
     private PictureUrlUpload pictureUrlUpload;
+
+    @Autowired
+    private ThreadPoolExecutor threadPoolExecutor;
 
     @Autowired
     private PictureMultipartFileUpload pictureMultipartFileUpload;
@@ -309,6 +315,83 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             throw new BusinessException(ErrorCode.OPERATION_ERROR);
         }
         return picture.getId();
+    }
+
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public boolean editPictureBatch(PictureEditBatchRequest editRequest, User loggedUser) {
+        // 校验修改参数
+        validPictureEditBatch(editRequest);
+        List<Picture> dbPictures = this.lambdaQuery()
+                .eq(Picture::getSpaceId, editRequest.getSpaceId())
+                .in(Picture::getId, editRequest.getPictureIdList())
+                .list();
+        if (dbPictures == null || dbPictures.isEmpty()) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "图片不存在");
+        }
+        boolean isAdmin = userService.hasPermission(loggedUser, UserRole.ADMIN);
+        // 同一个空间不会有别人上传图片，所以空间ID一致时，用户ID也一定一致
+        Picture pic = dbPictures.get(0);
+        if (!pic.getUserId().equals(loggedUser.getId()) && !isAdmin) {
+            throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "没有权限修改图片");
+        }
+        // 图片批量重命名
+        String nameRole = editRequest.getNameRule();
+        if (StrUtil.isNotBlank(nameRole)) {
+            int count = 1;
+            try {
+                for (Picture picture : dbPictures) {
+                    String picName = nameRole.replaceAll("\\{序号}", String.valueOf(count));
+                    picture.setName(picName);
+                    count++;
+                }
+            } catch (Exception e) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "名称解析失败");
+            }
+        }
+        // 分片执行，避免长事务
+        int batchSize = 100;
+        List<CompletableFuture<Void>> futures = new ArrayList<>();
+        for (int i = 0; i < dbPictures.size(); i += batchSize) {
+            List<Picture> pictures = dbPictures.subList(i, Math.min(i + batchSize, dbPictures.size()));
+            CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+                pictures.forEach(picture -> {
+                    // 更新分类信息
+                    String category = editRequest.getCategory();
+                    if (StrUtil.isNotBlank(category)) {
+                        picture.setCategory(category);
+                    }
+                    // 更新标签信息
+                    List<String> tags = editRequest.getTags();
+                    if (tags != null && !tags.isEmpty()) {
+                        picture.setTags(JSONUtil.toJsonStr(tags));
+                    }
+                });
+                boolean updated = this.updateBatchById(pictures);
+                if (!updated) {
+                    throw new BusinessException(ErrorCode.OPERATION_ERROR);
+                }
+            }, threadPoolExecutor);
+            futures.add(future);
+        }
+        // 等待所有任务完成
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+        return true;
+    }
+
+    private void validPictureEditBatch(PictureEditBatchRequest editRequest) {
+        List<Long> pictureIds = editRequest.getPictureIdList();
+        Long spaceId = editRequest.getSpaceId();
+        if (pictureIds == null || pictureIds.isEmpty()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "图片列表不能为空");
+        }
+        HashSet<Long> idSet = new HashSet<>(pictureIds);
+        if (pictureIds.size() != idSet.size()) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "图片重复修改");
+        }
+        if (spaceId == null || spaceId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "图片空间不能为空");
+        }
     }
 
     @Override
