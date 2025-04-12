@@ -160,7 +160,7 @@ public class ColorUtils {
 
         MrsColorHSV result = new MrsColorHSV();
         result.setColor(color);
-        result.setHexColor(colorToHex(color));
+        result.setHexColor(toHexString(color));
         result.setHue(Math.round(hue * 100) / 100f);
         result.setSaturation(Math.round(saturation * 100) / 100f);
         result.setValue(Math.round(value * 100) / 100f);
@@ -175,9 +175,32 @@ public class ColorUtils {
      * 将RGB颜色转换为16进制字符串
      *
      * @param color 颜色对象
+     * @return 16进制颜色字符串，格式为 r,g,b
+     */
+    public static String toRGBString(Color color) {
+        if (color == null) {
+            return null;
+        }
+        int r = color.getRed();
+        int g = color.getGreen();
+        int b = color.getBlue();
+        // 检查输入范围是否合法
+        if (r < 0 || r > 255 || g < 0 || g > 255 || b < 0 || b > 255) {
+            throw new IllegalArgumentException("RGB values must be in the range [0, 255]");
+        }
+        return String.format("%d,%d,%d", r, g, b);
+    }
+
+    /**
+     * 将RGB颜色转换为16进制字符串
+     *
+     * @param color 颜色对象
      * @return 16进制颜色字符串，格式为 #RRGGBB
      */
-    public static String colorToHex(Color color) {
+    public static String toHexString(Color color) {
+        if (color == null) {
+            return null;
+        }
         int r = color.getRed();
         int g = color.getGreen();
         int b = color.getBlue();
@@ -190,9 +213,9 @@ public class ColorUtils {
     }
 
     public static void main(String[] args) {
-        Map<?,?> map = new HashMap<>();
-        Map<?,?> map1 = new HashMap<>(16);
-        Map<?,?> map2 = new HashMap<>(16, 0.5f);
+        Map<?, ?> map = new HashMap<>();
+        Map<?, ?> map1 = new HashMap<>(16);
+        Map<?, ?> map2 = new HashMap<>(16, 0.5f);
         // 测试颜色
         // double similarity = calculateSimilarity("(100,123,66)", "0xFFF000");
         // System.out.println("颜色相似度为：" + similarity);
