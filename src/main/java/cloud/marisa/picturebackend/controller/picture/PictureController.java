@@ -1,8 +1,11 @@
 package cloud.marisa.picturebackend.controller.picture;
 
 import cloud.marisa.picturebackend.annotations.AuthCheck;
-import cloud.marisa.picturebackend.api.imagesearch.ImageSearchApiFacade;
-import cloud.marisa.picturebackend.api.imagesearch.entity.ImageSearchResult;
+import cloud.marisa.picturebackend.api.image.imageexpand.ImageOutPaintingApi;
+import cloud.marisa.picturebackend.api.image.imageexpand.entity.response.create.CreateTaskResponse;
+import cloud.marisa.picturebackend.api.image.imageexpand.entity.response.query.TaskQueryResponse;
+import cloud.marisa.picturebackend.api.image.imagesearch.ImageSearchApiFacade;
+import cloud.marisa.picturebackend.api.image.imagesearch.entity.ImageSearchResult;
 import cloud.marisa.picturebackend.common.MrsResult;
 import cloud.marisa.picturebackend.entity.dao.Picture;
 import cloud.marisa.picturebackend.entity.dao.Space;
@@ -20,11 +23,13 @@ import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.service.IUserService;
 import cloud.marisa.picturebackend.util.SessionUtil;
 import cn.hutool.core.util.RandomUtil;
+import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.util.DigestUtils;
 import org.springframework.web.bind.annotation.*;
@@ -64,7 +69,13 @@ public class PictureController {
     private ISpaceService spaceService;
 
     @Autowired
+    private ImageOutPaintingApi imageOutPaintingApi;
+
+    @Autowired
     private RedisTemplate<String, String> redisTemplate;
+
+    @Value("${mrs.color-search.similarity}")
+    private Float colorSimilarity;
 
     /**
      * 本地Caffeine缓存
@@ -371,6 +382,10 @@ public class PictureController {
     @PostMapping("/search/color")
     public MrsResult<?> searchPictureByColor(@RequestBody PictureQueryRequest queryRequest, HttpServletRequest request) {
         ThrowUtils.throwIf(queryRequest == null, ErrorCode.PARAMS_ERROR);
+        // 颜色近似度（越小越耗费性能）
+        if (colorSimilarity != null && colorSimilarity != 0) {
+            queryRequest.setPicSimilarity(colorSimilarity);
+        }
         Long spaceId = queryRequest.getSpaceId();
         List<PictureVo> pictureByColor = pictureService.getPictureByColor(spaceId, queryRequest, request);
         return MrsResult.ok(pictureByColor);
@@ -409,6 +424,43 @@ public class PictureController {
             return MrsResult.ok("更新成功", true);
         }
         return MrsResult.failed();
+    }
+
+    /**
+     * AI扩图服务
+     *
+     * @param taskRequest    AI扩图的请求参数封装
+     * @param servletRequest HttpServlet请求对象
+     * @return .
+     */
+    @AuthCheck(mustRole = UserRole.USER)
+    @PostMapping("/out_painting/create_task")
+    public MrsResult<?> createOutPaintingTask(
+            @RequestBody PictureOutPaintingTaskRequest taskRequest,
+            HttpServletRequest servletRequest) {
+        if (taskRequest == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        User loginUser = userService.getLoginUser(servletRequest);
+        CreateTaskResponse createTaskResponse = pictureService.createOutPaintingTask(taskRequest, loginUser);
+        return MrsResult.ok(createTaskResponse);
+    }
+
+    /**
+     * AI扩图服务
+     *
+     * @param taskId AI扩图的任务ID
+     * @return .
+     */
+    @AuthCheck(mustRole = UserRole.USER)
+    @GetMapping("/out_painting/get_task")
+    public MrsResult<?> queryOutPaintingTask(
+            @RequestParam(name = "taskId") String taskId) {
+        if (StrUtil.isBlank(taskId)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        TaskQueryResponse taskQueryResponse = imageOutPaintingApi.queryTask(taskId);
+        return MrsResult.ok(taskQueryResponse);
     }
 
     /**

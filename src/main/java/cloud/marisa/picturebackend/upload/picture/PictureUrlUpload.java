@@ -4,19 +4,18 @@ import cloud.marisa.picturebackend.config.PictureConfig;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.util.MrsPathUtil;
-import cn.hutool.core.io.FileUtil;
 import cn.hutool.core.io.unit.DataSize;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.http.HttpResponse;
 import cn.hutool.http.HttpStatus;
 import cn.hutool.http.HttpUtil;
 import cn.hutool.http.Method;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-import java.io.IOException;
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
@@ -24,6 +23,7 @@ import java.nio.file.Path;
  * @description URL格式的图片上传
  * @date 2025/4/2
  */
+@Slf4j
 @Component
 public class PictureUrlUpload extends PictureUploadTemplate {
     @Autowired
@@ -69,50 +69,38 @@ public class PictureUrlUpload extends PictureUploadTemplate {
     }
 
     @Override
-    protected String getOriginalFilename(Object inputSource) {
+    protected String getFileName(Object inputSource) {
         String fileURL = (String) inputSource;
         try (HttpResponse response = HttpUtil.createRequest(Method.HEAD, fileURL).execute()) {
-            if (response.getStatus() != HttpStatus.HTTP_OK) {
-                return FileUtil.getName(fileURL);
+            log.info("请求状态：{}", response.isOk());
+            // 如果请求失败，则返回URL中的文件名，尽管他并不准确
+            if (!response.isOk()) {
+                return getFileNameByURL(fileURL);
             }
             // 这里不应该这么做，比如application/x-gzip这个MIME类型对应的文件格式是.gz
             // 正确的做法应该用Map建立映射关系
             String contentType = response.header("Content-Type");
             if (StrUtil.isBlank(contentType)) {
-                return FileUtil.getName(fileURL);
+                return getFileNameByURL(fileURL);
             }
             String[] parts = contentType.split(";");
             String mimeType = parts[0].trim(); // 去掉可能的多余参数（如 charset）
             String[] typeParts = mimeType.split("/");
             if (typeParts.length == 2) {
-                String subType = typeParts[1];  // 子类型
-                return "." + subType;
+                return typeParts[1];
             }
-            return "." + typeParts[0];
+            return typeParts[0];
         } catch (Exception e) {
-            return FileUtil.getName(fileURL);
+            return getFileNameByURL(fileURL);
         }
     }
 
     @Override
     public InputStream getPictureStream(Object inputSource) {
         String url = (String) inputSource;
-        Path tempFile = null;
-        try {
-            tempFile = Files.createTempFile("download", ".tmp");
-            HttpUtil.downloadFile(url, tempFile.toFile());
-            return Files.newInputStream(tempFile);
-        } catch (IOException e) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR, "下载文件失败");
-        } finally {
-            try {
-                if (tempFile != null) {
-                    Files.deleteIfExists(tempFile);
-                }
-            } catch (IOException e) {
-                System.err.println("临时文件删除失败: " + e.getMessage());
-            }
-        }
+        byte[] bytes = HttpUtil.downloadBytes(url);
+        return new ByteArrayInputStream(bytes);
+
     }
 
     @Override
@@ -122,11 +110,20 @@ public class PictureUrlUpload extends PictureUploadTemplate {
         }
         String url = (String) inputSource;
         try (HttpResponse response = HttpUtil.createRequest(Method.HEAD, url).execute()) {
-            if (response.getStatus() != HttpStatus.HTTP_OK) {
-                return null;
-            }
             String contentLength = response.header("Content-Length");
             return StrUtil.isBlank(contentLength) ? null : Long.parseLong(contentLength);
+        }
+    }
+
+    private String getFileNameByURL(String url) {
+        try {
+            Path path = Path.of(url);
+            Path fileName = path.getFileName();
+            log.info("文件名：{}", fileName);
+            return fileName.toString();
+        } catch (Exception e) {
+            log.error("获取文件名失败: ", e);
+            return null;
         }
     }
 }

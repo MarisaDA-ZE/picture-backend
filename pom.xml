@@ -31,7 +31,7 @@
         <mybatis-bom.version>3.5.9</mybatis-bom.version>
         <mybatis-page.version>3.5.9</mybatis-page.version>
         <hutool.version>5.8.26</hutool.version>
-        <log4j.version>4.4.0</log4j.version>
+        <knife4j.version>4.4.0</knife4j.version>
         <image-io.version>3.8.2</image-io.version>
         <minio.version>8.5.2</minio.version>
         <jsoup.version>1.15.3</jsoup.version>
@@ -39,11 +39,18 @@
         <redisson.version>3.21.3</redisson.version>
         <thumbnailator.version>0.4.20</thumbnailator.version>
         <fastjson.version>2.0.32</fastjson.version>
+        <dashscope.version>2.19.0</dashscope.version>
     </properties>
     <dependencies>
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-web</artifactId>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-logging</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <dependency>
@@ -124,9 +131,16 @@
         <dependency>
             <groupId>com.github.xiaoymin</groupId>
             <artifactId>knife4j-openapi2-spring-boot-starter</artifactId>
-            <version>${log4j.version}</version>
+            <version>${knife4j.version}</version>
         </dependency>
 
+        <!-- 日志组件 -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-log4j2</artifactId>
+        </dependency>
+
+        <!-- AOP切面编程 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-aop</artifactId>
@@ -200,6 +214,14 @@
             <groupId>com.alibaba.fastjson2</groupId>
             <artifactId>fastjson2</artifactId>
             <version>${fastjson.version}</version>
+        </dependency>
+
+        <!-- https://mvnrepository.com/artifact/com.alibaba/dashscope-sdk-java -->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>dashscope-sdk-java</artifactId>
+            <version>${dashscope.version}</version>
+            <scope>compile</scope>
         </dependency>
 
 

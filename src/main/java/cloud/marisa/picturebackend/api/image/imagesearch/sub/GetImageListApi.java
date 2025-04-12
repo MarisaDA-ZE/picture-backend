@@ -1,6 +1,6 @@
-package cloud.marisa.picturebackend.api.imagesearch.sub;
+package cloud.marisa.picturebackend.api.image.imagesearch.sub;
 
-import cloud.marisa.picturebackend.api.imagesearch.entity.ImageSearchResult;
+import cloud.marisa.picturebackend.api.image.imagesearch.entity.ImageSearchResult;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cn.hutool.http.HttpResponse;

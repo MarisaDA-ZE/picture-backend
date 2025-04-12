@@ -41,6 +41,26 @@ public class EnumUtil {
     }
 
     /**
+     * 根据枚举值尝试获取枚举对象
+     * <p>非空方法</p>
+     * <p> 值 -> 枚举 </p>
+     *
+     * @param value        枚举值的字符串形式
+     * @param defaultValue 如果不存在时的默认值
+     * @param <E>          E
+     * @return 具体的枚举对象
+     */
+    public static <T, E extends MrsBaseEnum<T>> E fromValueNotNull(T value, E defaultValue) {
+        Class<?> aClass = defaultValue.getClass();
+        Class<E> clazz = (Class<E>) defaultValue.getClass();
+        E res = fromValue(value, clazz);
+        if (res == null) {
+            return defaultValue;
+        }
+        return res;
+    }
+
+    /**
      * 值是否在某个枚举类中
      *
      * @param value 要判断的值

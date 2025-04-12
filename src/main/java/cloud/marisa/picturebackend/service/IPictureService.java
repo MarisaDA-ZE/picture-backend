@@ -1,5 +1,6 @@
 package cloud.marisa.picturebackend.service;
 
+import cloud.marisa.picturebackend.api.image.imageexpand.entity.response.create.CreateTaskResponse;
 import cloud.marisa.picturebackend.entity.dao.Picture;
 import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.entity.dto.common.DeleteRequest;
@@ -47,6 +48,15 @@ public interface IPictureService extends IService<Picture> {
      * @return 入库成功的数量
      */
     Integer uploadPictureBatch(PictureUploadBatchRequest uploadBatchRequest, User loggedUser);
+
+    /**
+     * 创建扩图任务
+     *
+     * @param outPaintingTaskRequest 扩图参数的DTO封装
+     * @param loggedUser             当前登录用户
+     * @return 扩图结果
+     */
+    CreateTaskResponse createOutPaintingTask(PictureOutPaintingTaskRequest outPaintingTaskRequest, User loggedUser);
 
     /**
      * 用户更新图片信息

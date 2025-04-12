@@ -1,4 +1,4 @@
-package cloud.marisa.picturebackend.common;
+package cloud.marisa.picturebackend.config;
 
 import org.redisson.Redisson;
 import org.redisson.api.RedissonClient;

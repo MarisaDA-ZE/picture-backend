@@ -2,6 +2,7 @@ package cloud.marisa.picturebackend.util;
 
 import io.minio.*;
 import io.minio.http.Method;
+import okhttp3.OkHttpClient;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.MediaType;
 import org.springframework.http.MediaTypeFactory;
@@ -10,8 +11,12 @@ import org.springframework.util.MimeType;
 import org.springframework.web.multipart.MultipartFile;
 import cloud.marisa.picturebackend.config.MinioConfig;
 
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
+import javax.net.ssl.X509TrustManager;
 import java.io.*;
 
+import java.security.cert.X509Certificate;
 import java.util.concurrent.TimeUnit;
 
 @Component
@@ -119,6 +124,7 @@ public class MinioUtil {
                     .contentType(getContentType(fileName))
                     .build());
         } catch (Exception e) {
+            e.printStackTrace();
             System.err.println("文件上传出错==>" + e.getMessage());
         }
     }
@@ -266,5 +272,39 @@ public class MinioUtil {
         } catch (Exception e) {
             System.err.println(e.getMessage());
         }
+    }
+
+    private static MinioUtil localCall() {
+//        String host = "https://192.168.10.254:9000";
+        String host = "https://oss.marisa.cloud:9000";
+        String accessKey = "marisa";
+        String secretKey = "$pwdByMIO6860.";
+        String bucketName = "picture-backend";
+        MinioUtil minioUtil = new MinioUtil();
+        MinioConfig config = new MinioConfig();
+        config.setUrl(host);
+        config.setAccessKey(accessKey);
+        config.setSecretKey(secretKey);
+        config.setBucketName(bucketName);
+        minioUtil.configuration = config;
+
+        // 使用自定义 HTTP 客户端初始化 MinioClient
+        minioUtil.minioClient = MinioClient.builder()
+                .endpoint(config.getUrl())
+                .credentials(config.getAccessKey(), config.getSecretKey())
+                .build();
+        return minioUtil;
+
+    }
+
+    public static void main(String[] args) {
+        MinioUtil instance = localCall();
+        String fileUrl = instance.getFileUrl("/picture/124891671_p0.jpg");
+        System.out.println(fileUrl);
+//        String path = "C:\\Users\\Marisa\\Desktop\\thems\\124891671_p0.jpg";
+//        File file = new File(path);
+//        instance.upload(file, "test.jpg");
+//        System.out.println("上传完成");
+//        System.exit(0);
     }
 }

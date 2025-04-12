@@ -1,5 +1,9 @@
 package cloud.marisa.picturebackend.service.impl;
 
+import cloud.marisa.picturebackend.api.image.imageexpand.ImageOutPaintingApi;
+import cloud.marisa.picturebackend.api.image.imageexpand.entity.request.ImagePaintingParameters;
+import cloud.marisa.picturebackend.api.image.imageexpand.entity.request.ImageRequestParam;
+import cloud.marisa.picturebackend.api.image.imageexpand.entity.response.create.CreateTaskResponse;
 import cloud.marisa.picturebackend.entity.dao.Picture;
 import cloud.marisa.picturebackend.entity.dao.Space;
 import cloud.marisa.picturebackend.entity.dao.User;
@@ -35,6 +39,7 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -57,6 +62,7 @@ import java.util.stream.Collectors;
  * @description 针对表【picture(图片表)】的数据库操作Service实现
  * @createDate 2025-03-29 22:12:31
  */
+@Log4j2
 @Service
 public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         implements IPictureService {
@@ -84,6 +90,9 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
 
     @Autowired
     private PictureMultipartFileUpload pictureMultipartFileUpload;
+
+    @Autowired
+    private ImageOutPaintingApi imageOutPaintingApi;
 
     @Value("${mrs.picture-bath-url}")
     private String pictureBathUrl;
@@ -153,19 +162,6 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         if (inputSource instanceof String) {
             uploadTemplate = pictureUrlUpload;
         }
-        Long fileSize = uploadTemplate.getPictureSize(inputSource);
-        // 上传到私有空间，需要限制大小和数量
-        if (spaceId != null) {
-            // 这里只是校验，更新空间大小在下面
-            Long totalSize = space.getTotalSize();
-            Integer totalCount = space.getTotalCount();
-            if ((totalSize + fileSize) > space.getMaxSize()) {
-                throw new BusinessException(ErrorCode.OPERATION_ERROR, "空间容量不足");
-            }
-            if ((totalCount + 1) > space.getMaxCount()) {
-                throw new BusinessException(ErrorCode.OPERATION_ERROR, "剩余可用数不足");
-            }
-        }
         long current = System.currentTimeMillis();
         String hex = MD5.create().digestHex(uploadTemplate.getPictureStream(inputSource));
         // 只找一个就够了，这样会快一点
@@ -186,8 +182,8 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             }
             // 保存图片到文件服务器
             UploadPictureResult uploadPictureResult = uploadTemplate.uploadPictureObject(inputSource, uploadPath);
-            uploadPictureResult.setPicSize(fileSize);
             System.out.println("上传耗时: " + (System.currentTimeMillis() - current));
+            log.info("原始上传数据 {}", uploadPictureResult);
             picture = getPicture(loginUser, uploadPictureResult);
         } else {
             // TODO: 图片秒传功能有点BUG
@@ -200,11 +196,21 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             System.out.println("秒传啦");
             System.out.println("上传耗时: " + (System.currentTimeMillis() - current));
         }
-        // 空间ID
+        // 上传到私有空间，需要限制大小和数量
         if (spaceId != null) {
             picture.setSpaceId(spaceId);
+            // 这里只是校验，更新空间大小在下面
+            Long totalSize = space.getTotalSize();
+            Integer totalCount = space.getTotalCount();
+            Long fileSize = picture.getPicSize();
+            if ((totalSize + fileSize) > space.getMaxSize()) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "空间容量不足");
+            }
+            if ((totalCount + 1) > space.getMaxCount()) {
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "剩余可用数不足");
+            }
         }
-        // 自定义文件名（入库名不影响存储名）
+        // 自定义文件名（图片名不影响存储名）
         String picName = uploadRequest.getPicName();
         if (StrUtil.isNotBlank(picName)) {
             picture.setName(picName);
@@ -215,6 +221,7 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             picture.setId(pictureId);
             picture.setEditTime(new Date());
         }
+        log.info("图片信息 {}", picture);
         // 开启事务
         transactionTemplate.execute(status -> {
             boolean pictureSaved = this.saveOrUpdate(picture);
@@ -223,10 +230,11 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             }
             // 上传的私有空间，更新空间信息
             if (space != null) {
+                Long totalSize = space.getTotalSize() + picture.getPicSize();
                 // 更新空间数据
                 LambdaUpdateWrapper<Space> updateWrapper = new LambdaUpdateWrapper<>();
                 updateWrapper.eq(Space::getId, space.getId());
-                updateWrapper.set(Space::getTotalSize, space.getTotalSize() + fileSize);
+                updateWrapper.set(Space::getTotalSize, totalSize);
                 updateWrapper.set(Space::getTotalCount, space.getTotalCount() + 1);
                 updateWrapper.set(Space::getEditTime, new Date());
                 boolean spaceUpdated = spaceService.update(updateWrapper);
@@ -274,6 +282,75 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
             }
         }
         return uploadCount;
+    }
+
+    @Override
+    public CreateTaskResponse createOutPaintingTask(PictureOutPaintingTaskRequest outPaintingTaskRequest, User loggedUser) {
+        Long pictureId = outPaintingTaskRequest.getPictureId();
+        if (pictureId == null || pictureId <= 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR);
+        }
+        ImagePaintingParameters parameters = outPaintingTaskRequest.getParameters();
+        Picture dbPicture = this.lambdaQuery().eq(Picture::getId, pictureId).one();
+        // 判断图片是否存在
+        if (dbPicture == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "图片不存在");
+        }
+        // 判断是否有编辑权限
+        boolean isMaster = userService.hasPermission(loggedUser, UserRole.MASTER);
+        if (!dbPicture.getUserId().equals(loggedUser.getId()) && !isMaster) {
+            throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无操作权限");
+        }
+        // 校验参数
+        checkPictureOutPainting(dbPicture, parameters, loggedUser);
+        String imageURL = dbPicture.getUrl();
+        // 是否要使用原图进行AI扩图，原图扩图可能会导致效率变慢，但质量会更好
+        Boolean useOriginal = outPaintingTaskRequest.getUseOriginal();
+        if ((useOriginal != null) && useOriginal) {
+            imageURL = dbPicture.getOriginalUrl();
+        }
+        ImageRequestParam params = new ImageRequestParam(imageURL, parameters);
+        System.out.println(params);
+        return imageOutPaintingApi.createTask(params);
+    }
+
+    /**
+     * 校验AI扩图参数
+     *
+     * @param picture    图片对象
+     * @param parameters 扩图参数
+     * @param loggedUser 登录用户
+     */
+    private void checkPictureOutPainting(Picture picture, ImagePaintingParameters parameters, User loggedUser) {
+        boolean isAdmin = userService.hasPermission(loggedUser, UserRole.ADMIN);
+        float xScale = parameters.getXScale();
+        float yScale = parameters.getYScale();
+        float xOffset = parameters.getLeftOffset() + parameters.getRightOffset();
+        float yOffset = parameters.getTopOffset() + parameters.getBottomOffset();
+        // 校验偏移量
+        if (parameters.getLeftOffset() < 0 || parameters.getRightOffset() < 0
+                || parameters.getTopOffset() < 0 || parameters.getBottomOffset() < 0) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "偏移量不能为负数");
+        }
+        // 扩图宽度限制
+        if ((xScale < 1 || xScale > 3) || (picture.getPicWidth() * 3 < xOffset)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "扩图宽度不能超过原来的3倍");
+        }
+        // 扩图高度限制
+        if ((yScale < 1 || yScale > 3) || (picture.getPicHeight() * 3 < yOffset)) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "扩图高度不能超过原来的3倍");
+        }
+        // 角度限制
+        Integer rotateAngle = parameters.getAngle();
+        if (rotateAngle < 0 || rotateAngle > 359) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "旋转角度不正确");
+        }
+        // 某些功能不开放给普通用户
+        if (!isAdmin) {
+            // 禁止普通用户使用 高质量功能 和 解除尺寸限制功能
+            parameters.setBestQuality(false);
+            parameters.setLimitImageSize(true);
+        }
     }
 
     @Override
@@ -447,10 +524,14 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
         picture.setOriginalUrl(uploadResult.getUrlOriginal());
         // 颜色信息
         picture.setPicColor(uploadResult.getPicColor());
+        // 主要颜色(hsv)
         picture.setMColorHue(uploadResult.getMColorHue());
         picture.setMColorSaturation(uploadResult.getMColorSaturation());
         picture.setMColorValue(uploadResult.getMColorValue());
+        // 颜色桶(hsv)
         picture.setMHueBucket(uploadResult.getMHueBucket());
+        picture.setMSaturationBucket(uploadResult.getMSaturationBucket());
+        picture.setMValueBucket(uploadResult.getMValueBucket());
         // ...
         picture.setMd5(uploadResult.getMd5());
         picture.setPicSize(uploadResult.getPicSize());

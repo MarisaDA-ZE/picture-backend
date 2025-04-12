@@ -97,12 +97,22 @@ public class UploadPictureResult implements Serializable {
     private Integer mHueBucket;
 
     /**
+     * 饱和度分桶（0~100%）
+     */
+    private Integer mSaturationBucket;
+
+    /**
+     * 明度分桶（0~100%）
+     */
+    private Integer mValueBucket;
+
+    /**
      * 图片长宽比
      */
     private Double picScale;
 
     /**
-     * 图片格式（.jpg）
+     * 图片格式（jpg、png、...）
      */
     private String picFormat;
 

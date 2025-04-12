@@ -1,5 +1,9 @@
 package cloud.marisa.picturebackend.util;
 
+import lombok.Data;
+import lombok.Getter;
+import lombok.Setter;
+import lombok.ToString;
 import net.coobird.thumbnailator.Thumbnails;
 import org.apache.commons.compress.utils.IOUtils;
 
@@ -11,11 +15,11 @@ import java.io.*;
 import java.awt.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.Iterator;
+import java.util.*;
 import java.io.IOException;
 import java.io.InputStream;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * @author MarisaDAZE
@@ -256,23 +260,125 @@ public class ImageUtil {
         return resized;
     }
 
+    // ==========================================
+    public static String getDominantColor2(InputStream imageStream) throws IOException {
+        BufferedImage image = ImageIO.read(imageStream);
+        BufferedImage resizedImage = Thumbnails.of(image).size(100, 100).asBufferedImage();
+
+        // 改用HSL颜色空间分桶
+        Map<Integer, ColorStats> colorStatsMap = new HashMap<>();
+        int width = resizedImage.getWidth();
+        int height = resizedImage.getHeight();
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int rgb = resizedImage.getRGB(x, y);
+                float[] hsl = rgbToHsl(rgb);
+
+                // 分桶策略调整：H(色调)细分为36级，S(饱和度)/L(亮度)各8级
+                int hBucket = (int) (hsl[0] * 36) % 36;
+                int sBucket = (int) (hsl[1] * 8);
+                int lBucket = (int) (hsl[2] * 8);
+                int key = (hBucket << 16) | (sBucket << 8) | lBucket;
+
+                colorStatsMap.compute(key, (k, v) -> {
+                    if (v == null) {
+                        return new ColorStats(rgb);
+                    } else {
+                        v.addColor(rgb);
+                        return v;
+                    }
+                });
+            }
+        }
+
+        // 筛选高饱和度、中等亮度的颜色（排除过暗/过亮）
+        List<ColorStats> candidates = colorStatsMap.values().stream()
+                .filter(cs -> cs.avgL() > 0.2 && cs.avgL() < 0.8)
+                .filter(cs -> cs.avgS() > 0.4)
+                .sorted((a, b) -> Integer.compare(b.count, a.count))
+                .collect(Collectors.toList());
+
+//        // 加权混合逻辑（加入亮度权重）
+//        // ...
+//        // 关键分桶参数调整
+//        int hBucket = (int) (hsl[0] * 36) % 36;  // 色调细分为36级（每10度一档）
+//        int sBucket = (int) (hsl[1] * 8);       // 饱和度8级
+//        int lBucket = (int) (hsl[2] * 8);       // 亮度8级
+        return null;
+    }
+
+    // RGB转HSL工具方法
+    private static float[] rgbToHsl(int rgb) {
+        int r = (rgb >> 16) & 0xFF;
+        int g = (rgb >> 8) & 0xFF;
+        int b = rgb & 0xFF;
+        float[] hsl = new float[3];
+        Color.RGBtoHSB(r, g, b, hsl);
+        return hsl;
+    }
+
+    // 统计类调整为存储HSL信息
+    @Data
+    @ToString
+    public static class ColorStats {
+        private int count;
+        private float sumH, sumS, sumL;
+        private int sumR, sumG, sumB;
+
+        public ColorStats(int rgb) {
+            addColor(rgb);
+        }
+
+        public void addColor(int rgb) {
+            float[] hsl = rgbToHsl(rgb);
+            sumH += hsl[0];
+            sumS += hsl[1];
+            sumL += hsl[2];
+
+            int r = (rgb >> 16) & 0xFF;
+            int g = (rgb >> 8) & 0xFF;
+            int b = rgb & 0xFF;
+            sumR += r;
+            sumG += g;
+            sumB += b;
+            count++;
+        }
+
+        public float avgH() { return sumH / count; }
+        public float avgS() { return sumS / count; }
+        public float avgL() { return sumL / count; }
+    }
+
 
     public static void main(String[] args) {
-        String path = "C:\\Users\\Marisa\\Desktop\\thems\\126638656_p0.png";
-        // String path = "C:\\Users\\Marisa\\Desktop\\thems\\test.webp";
-        File file = new File(path);
-        try (InputStream fis = new FileInputStream(file)) {
-            long current = System.currentTimeMillis();
-            InputStream thumbnail = createThumbnail(fis, 1000);
-            System.out.println("压缩耗时：" + (System.currentTimeMillis() - current));
-            System.out.println("===================");
-            current = System.currentTimeMillis();
-            int[] color = getDominantColor(thumbnail);
-            System.out.printf("主色调 RGB(%d, %d, %d)\n", color[0], color[1], color[2]);
-            System.out.println("拾色耗时：" + (System.currentTimeMillis() - current));
-            thumbnail.close();
-        } catch (IOException ex) {
-            System.out.println(ex.getMessage());
-        }
+        String path = "C:\\Users\\Marisa\\Desktop\\thems\\bg.png";
+//        String path = "C:\\Users\\Marisa\\Desktop\\thems\\126638656_p0.png";
+//         String path = "C:\\Users\\Marisa\\Desktop\\thems\\test.webp";
+//        File file = new File(path);
+//        try (InputStream fis = new FileInputStream(file)) {
+//            long current = System.currentTimeMillis();
+//            // InputStream thumbnail = createThumbnail(fis, 1000);
+//            byte[] bytes = fis.readAllBytes();  // 原图
+//            System.out.println("压缩耗时：" + (System.currentTimeMillis() - current));
+//            System.out.println("===================");
+//            current = System.currentTimeMillis();
+//            Color color2 = Color.decode(getDominantColor2(new ByteArrayInputStream(bytes)));
+//
+//            ByteArrayOutputStream os = new ByteArrayOutputStream();
+//            BufferedImage image = ImageIO.read(new ByteArrayInputStream(bytes));
+//            Thumbnails.of(image).size(100, 100).toOutputStream(os);
+//            ByteArrayInputStream byteArrayInputStream = new ByteArrayInputStream(os.toByteArray());
+//            File file1 = new File("C:\\Users\\Marisa\\Desktop\\thems\\output.webp");
+//            try(FileOutputStream fos = new FileOutputStream(file1)) {
+//                fos.write(byteArrayInputStream.readAllBytes());
+//                fos.flush();
+//            }
+//
+//            System.out.println("主色调 "+ color2.toString());
+//            System.out.println("拾色耗时：" + (System.currentTimeMillis() - current));
+//        } catch (IOException ex) {
+//            System.out.println(ex.getMessage());
+//        }
     }
 }

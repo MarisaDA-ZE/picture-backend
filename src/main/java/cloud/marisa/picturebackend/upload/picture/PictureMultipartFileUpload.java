@@ -56,9 +56,9 @@ public class PictureMultipartFileUpload extends PictureUploadTemplate {
     }
 
     @Override
-    public String getOriginalFilename(Object inputSource) {
+    public String getFileName(Object inputSource) {
         MultipartFile multipartFile = (MultipartFile) inputSource;
-        return multipartFile.getOriginalFilename();
+        return multipartFile.getName();
     }
 
     @Override

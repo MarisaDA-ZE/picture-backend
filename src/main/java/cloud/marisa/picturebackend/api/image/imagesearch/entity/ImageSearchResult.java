@@ -1,4 +1,4 @@
-package cloud.marisa.picturebackend.api.imagesearch.entity;
+package cloud.marisa.picturebackend.api.image.imagesearch.entity;
 
 import lombok.Data;
 

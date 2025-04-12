@@ -1,6 +1,6 @@
-package cloud.marisa.picturebackend.api.imagesearch;
+package cloud.marisa.picturebackend.api.image.imagesearch;
 
-import cloud.marisa.picturebackend.api.imagesearch.entity.ImageSearchResult;
+import cloud.marisa.picturebackend.api.image.imagesearch.entity.ImageSearchResult;
 
 import java.util.ArrayList;
 import java.util.List;

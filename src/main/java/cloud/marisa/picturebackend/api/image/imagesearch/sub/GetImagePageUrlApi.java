@@ -1,4 +1,4 @@
-package cloud.marisa.picturebackend.api.imagesearch.sub;
+package cloud.marisa.picturebackend.api.image.imagesearch.sub;
 
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;

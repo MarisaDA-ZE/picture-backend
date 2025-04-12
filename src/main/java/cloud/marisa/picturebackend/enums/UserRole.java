@@ -42,7 +42,13 @@ public enum UserRole implements MrsBaseEnum<String> {
      * <p>③管理公共图片库的数据</p>
      * <p>④审核用户上传（公共库和私有库）的图片</p>
      */
-    ADMIN("admin", 5);
+    ADMIN("admin", 5),
+
+    /**
+     * 站长角色
+     * <p style="color: #EA5774;">拥有所有权限</p>
+     */
+    MASTER("master", 10);
 
     UserRole(String value, int level) {
         this.level = level;
