@@ -10,10 +10,8 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 import java.awt.*;
-import java.util.ArrayList;
-import java.util.Date;
+import java.util.*;
 import java.util.List;
-import java.util.Random;
 
 /**
  * @author MarisaDAZE
@@ -28,10 +26,7 @@ public class PictureUploadTests {
 
     @Test
     public void test2() {
-        Random random = new Random();
-        for (int i = 0; i < 10; i++) {
-            System.out.println(random.nextInt(3));
-        }
+
     }
 
     @Test
