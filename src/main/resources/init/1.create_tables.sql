@@ -98,8 +98,19 @@ CREATE TABLE IF NOT EXISTS space (
     INDEX `idx_space_level`(`space_level` ASC) USING BTREE COMMENT '空间等级索引'
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '空间表' ROW_FORMAT = Dynamic;
 
-
-
+-- 空间用户关联表 --
+CREATE TABLE IF NOT EXISTS space_user (
+    `id` bigint NOT NULL COMMENT '主键ID',
+    `space_id` bigint NOT NULL COMMENT '空间ID',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `space_role` varchar(32) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '空间角色（viewer、editor、admin）',
+    `create_time` datetime NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NULL DEFAULT NULL COMMENT '更新时间',
+    PRIMARY KEY (`id`) USING BTREE,
+    UNIQUE INDEX `uk_space_id_user_id`(`space_id` ASC, `user_id` ASC) USING BTREE COMMENT '空间ID和用户ID的唯一索引（一个用户在一个空间中只能有一个角色）',
+    INDEX `idx_space_id`(`space_id` ASC) USING BTREE COMMENT '空间ID的索引',
+    INDEX `idx_user_id`(`user_id` ASC) USING BTREE COMMENT '用户ID的索引'
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '空间-用户的关联表' ROW_FORMAT = Dynamic;
 
 
 

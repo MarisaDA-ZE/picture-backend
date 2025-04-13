@@ -5,6 +5,7 @@ import lombok.Data;
 import lombok.ToString;
 
 import java.io.Serializable;
+
 /**
  * @author Marisa
  * @description 通用返回类
@@ -85,6 +86,13 @@ public class MrsResult<T> implements Serializable {
 
     public static <T> MrsResult<T> failed(String msg) {
         return new MrsResult<>(ErrorCode.INTERNAL_SERVER_ERROR.getCode(), false, msg);
+    }
+
+    public static <T> MrsResult<T> failed(T data) {
+        return new MrsResult<>(ErrorCode.INTERNAL_SERVER_ERROR.getCode(),
+                false,
+                ErrorCode.INTERNAL_SERVER_ERROR.getMsg(),
+                data);
     }
 
     public static <T> MrsResult<T> failed(int code, String msg) {

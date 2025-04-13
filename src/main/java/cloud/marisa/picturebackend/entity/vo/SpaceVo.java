@@ -39,8 +39,12 @@ public class SpaceVo implements Serializable {
      * 空间等级（0-普通版、1-专业版、2-旗舰版）
      */
     private Integer spaceLevel;
-    // 这俩一样的，前端叫spaceType
+
+    /**
+     * 空间类型：0-私有 1-团队
+     */
     private Integer spaceType;
+
 
     /**
      * 权限操作列表
@@ -100,9 +104,8 @@ public class SpaceVo implements Serializable {
         SpaceVo spaceVo = new SpaceVo();
         BeanUtils.copyProperties(space, spaceVo);
         // 0 私有空间，1 团队空间，2 不知道，不显示，应该不是spaceLevel
-        // spaceVo.setSpaceType(space.getSpaceLevel());
-        spaceVo.setSpaceType(0);
-        spaceVo.setPermissionList(getPermissions());
+        // spaceVo.setSpaceType(0);
+        // spaceVo.setPermissionList(getPermissions());
         return spaceVo;
     }
 

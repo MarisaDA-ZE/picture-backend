@@ -69,4 +69,12 @@ public interface ISpaceService extends IService<Space> {
      */
     boolean deleteSpaceById(DeleteRequest deleteRequest, User loggedUser);
 
+    /**
+     * 根据空间对象获取一个空间VO对象
+     *
+     * @param space 空间对象
+     * @return 空间Vo对象
+     */
+    SpaceVo getSpaceVo(Space space);
+
 }

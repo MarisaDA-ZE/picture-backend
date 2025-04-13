@@ -48,6 +48,13 @@ public class Space implements Serializable {
     private Integer spaceLevel;
 
     /**
+     * 空间类型：0-私有 1-团队
+     */
+    @TableField("space_type")
+    private Integer spaceType;
+
+
+    /**
      * 最大存储空间（Byte）
      */
     @TableField("max_size")
