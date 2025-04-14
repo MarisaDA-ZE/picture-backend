@@ -1,5 +1,6 @@
 package cloud.marisa.picturebackend.service.impl;
 
+import cloud.marisa.picturebackend.manager.auth.StpKit;
 import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.entity.dto.user.*;
 import cloud.marisa.picturebackend.entity.vo.UserVo;
@@ -84,6 +85,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         // 通过setAttribute时，前端拿到的只是一个session_id，真正的数据在服务器，因此不用担心数据篡改
         servletRequest.getSession().setAttribute(USER_LOGIN, dbUser);
 
+        StpKit.SPACE.login(dbUser.getId());
+        StpKit.SPACE.getSession().set(USER_LOGIN, dbUser);
         // 返回VO对象
         return User.toVO(dbUser);
     }

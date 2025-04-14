@@ -1,5 +1,6 @@
 package cloud.marisa.picturebackend.controller.spaceuser;
 
+import cloud.marisa.picturebackend.annotations.SaSpaceCheckPermission;
 import cloud.marisa.picturebackend.common.MrsResult;
 import cloud.marisa.picturebackend.entity.dao.SpaceUser;
 import cloud.marisa.picturebackend.entity.dao.User;
@@ -10,6 +11,7 @@ import cloud.marisa.picturebackend.entity.dto.spaceuser.SpaceUserQueryRequest;
 import cloud.marisa.picturebackend.entity.vo.SpaceUserVo;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
+import cloud.marisa.picturebackend.manager.auth.constant.SpaceUserPermissionConstants;
 import cloud.marisa.picturebackend.service.ISpaceUserService;
 import cloud.marisa.picturebackend.service.IUserService;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -44,6 +46,7 @@ public class SpaceUserController {
      * @return 空间-用户对象
      */
     @PostMapping("/get")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.SPACE_USER_MANAGE)
     public MrsResult<?> getSpaceUser(
             @RequestBody SpaceUserQueryRequest queryRequest,
             HttpServletRequest httpServletRequest) {
@@ -99,6 +102,7 @@ public class SpaceUserController {
      * @return 空间-用户对象
      */
     @PostMapping("/list")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.SPACE_USER_MANAGE)
     public MrsResult<?> getSpaceUserList(
             @RequestBody SpaceUserQueryRequest queryRequest,
             HttpServletRequest httpServletRequest) {
@@ -143,6 +147,7 @@ public class SpaceUserController {
      * @return 空间-用户对象ID
      */
     @PostMapping("/add")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.SPACE_USER_MANAGE)
     public MrsResult<?> addSpaceUser(
             @RequestBody SpaceUserAddRequest addRequest,
             HttpServletRequest httpServletRequest) {
@@ -167,6 +172,7 @@ public class SpaceUserController {
      * @return 空间-用户对象ID
      */
     @PostMapping("/edit")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.SPACE_USER_MANAGE)
     public MrsResult<?> editSpaceUser(
             @RequestBody SpaceUserEditRequest editRequest,
             HttpServletRequest httpServletRequest) {
@@ -193,6 +199,7 @@ public class SpaceUserController {
      * @return 是否删除成功
      */
     @PostMapping("/delete")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.SPACE_USER_MANAGE)
     public MrsResult<?> deleteSpaceUser(
             @RequestBody DeleteRequest deleteRequest,
             HttpServletRequest httpServletRequest) {

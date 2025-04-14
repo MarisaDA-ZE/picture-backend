@@ -14,6 +14,7 @@ import cloud.marisa.picturebackend.enums.SpaceLevelEnum;
 import cloud.marisa.picturebackend.enums.UserRole;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
+import cloud.marisa.picturebackend.manager.auth.SpaceUserAuthManager;
 import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.service.IUserService;
 import cloud.marisa.picturebackend.util.MrsAuthUtil;
@@ -22,6 +23,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.ObjectUtils;
 import org.springframework.web.bind.annotation.*;
 
+import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.Arrays;
 import java.util.List;
@@ -44,6 +46,9 @@ public class SpaceController {
 
     @Autowired
     private ISpaceService spaceService;
+
+    @Resource
+    private SpaceUserAuthManager spaceUserAuthManager;
 
     /**
      * 管理员按ID查询空间信息
@@ -87,7 +92,7 @@ public class SpaceController {
             throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
         }
         SpaceVo vo = SpaceVo.toVo(space);
-        List<String> permissions = MrsAuthUtil.getPermissions(space.getUserId(), loggedUser);
+        List<String> permissions = spaceUserAuthManager.getPermissionList(space, loggedUser);
         vo.setPermissionList(permissions);
         return MrsResult.ok(vo);
     }

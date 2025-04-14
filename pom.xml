@@ -40,6 +40,7 @@
         <thumbnailator.version>0.4.20</thumbnailator.version>
         <fastjson.version>2.0.32</fastjson.version>
         <dashscope.version>2.19.0</dashscope.version>
+        <sa-token.version>1.39.0</sa-token.version>
     </properties>
     <dependencies>
         <dependency>
@@ -113,7 +114,6 @@
             <artifactId>spring-session-data-redis</artifactId>
         </dependency>
 
-
         <!-- 本地缓存 Caffeine -->
         <dependency>
             <groupId>com.github.ben-manes.caffeine</groupId>
@@ -128,6 +128,7 @@
             <version>${redisson.version}</version>
         </dependency>
 
+        <!-- 接口文档生成工具 -->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>
             <artifactId>knife4j-openapi2-spring-boot-starter</artifactId>
@@ -164,6 +165,26 @@
             <version>${hutool.version}</version>
             <scope>compile</scope>
         </dependency>
+
+        <!-- Sa-Token 权限认证 -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-spring-boot-starter</artifactId>
+            <version>${sa-token.version}</version>
+        </dependency>
+
+        <!-- Sa-Token 整合 Redis （使用 jackson 序列化方式） -->
+        <dependency>
+            <groupId>cn.dev33</groupId>
+            <artifactId>sa-token-redis-jackson</artifactId>
+            <version>1.39.0</version>
+        </dependency>
+        <!-- 提供Redis连接池 -->
+        <dependency>
+            <groupId>org.apache.commons</groupId>
+            <artifactId>commons-pool2</artifactId>
+        </dependency>
+
 
         <!-- MinIO分布式存储引擎 -->
         <!-- https://mvnrepository.com/artifact/io.minio/minio -->

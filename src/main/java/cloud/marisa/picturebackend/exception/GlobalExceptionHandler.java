@@ -1,6 +1,8 @@
 package cloud.marisa.picturebackend.exception;
 
 import cloud.marisa.picturebackend.common.MrsResult;
+import cn.dev33.satoken.exception.NotLoginException;
+import cn.dev33.satoken.exception.NotPermissionException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -56,6 +58,31 @@ public class GlobalExceptionHandler {
         log.error("运行时异常: ", e);
         return MrsResult.failed(ErrorCode.INTERNAL_SERVER_ERROR);
     }
+
+    /**
+     * Sa-Token-未登录
+     *
+     * @param e .
+     * @return .
+     */
+    @ExceptionHandler(NotLoginException.class)
+    public MrsResult<?> notLoginException(NotLoginException e) {
+        log.error("NotLoginException", e);
+        return MrsResult.failed(ErrorCode.NOT_LOGIN_ERROR, e.getMessage());
+    }
+
+    /**
+     * Sa-Token-没有权限
+     *
+     * @param e .
+     * @return .
+     */
+    @ExceptionHandler(NotPermissionException.class)
+    public MrsResult<?> notPermissionExceptionHandler(NotPermissionException e) {
+        log.error("NotPermissionException", e);
+        return MrsResult.failed(ErrorCode.AUTHORIZATION_ERROR, e.getMessage());
+    }
+
 
     /**
      * 解构字段错误信息

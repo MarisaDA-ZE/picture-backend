@@ -1,6 +1,7 @@
 package cloud.marisa.picturebackend.controller.picture;
 
 import cloud.marisa.picturebackend.annotations.AuthCheck;
+import cloud.marisa.picturebackend.annotations.SaSpaceCheckPermission;
 import cloud.marisa.picturebackend.api.image.imageexpand.ImageOutPaintingApi;
 import cloud.marisa.picturebackend.api.image.imageexpand.entity.response.create.CreateTaskResponse;
 import cloud.marisa.picturebackend.api.image.imageexpand.entity.response.query.TaskQueryResponse;
@@ -18,6 +19,8 @@ import cloud.marisa.picturebackend.enums.UserRole;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.exception.ThrowUtils;
+import cloud.marisa.picturebackend.manager.auth.StpKit;
+import cloud.marisa.picturebackend.manager.auth.constant.SpaceUserPermissionConstants;
 import cloud.marisa.picturebackend.service.IPictureService;
 import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.service.IUserService;
@@ -94,6 +97,7 @@ public class PictureController {
      * @return 图片VO对象
      */
     @PostMapping("/upload")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_UPLOAD)
     public MrsResult<?> uploadPicture(
             @RequestPart(name = "file") MultipartFile multipartFile,
             PictureUploadRequest pictureUploadRequest,
@@ -112,6 +116,7 @@ public class PictureController {
      * @return 一个PictureVo
      */
     @PostMapping("/upload/url")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_UPLOAD)
     public MrsResult<?> uploadURLPicture(
             @RequestBody PictureUploadRequest pictureUploadRequest,
             HttpServletRequest httpServletRequest) {
@@ -188,6 +193,7 @@ public class PictureController {
      * @return .
      */
     @PostMapping("/delete")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_DELETE)
     public MrsResult<?> deletePicture(@RequestBody DeleteRequest deleteRequest, HttpServletRequest httpServletRequest) {
         boolean removed = pictureService.deletePicture(deleteRequest, httpServletRequest);
         return removed ? MrsResult.ok("删除成功") : MrsResult.failed("删除失败");
@@ -236,6 +242,7 @@ public class PictureController {
      * @return 图片VO
      */
     @GetMapping("/get/vo")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_VIEW)
     public MrsResult<?> getPictureVoById(@RequestParam(name = "id") Long pid, HttpServletRequest httpServletRequest) {
         if (pid == null || pid <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -268,7 +275,9 @@ public class PictureController {
      * @return 图片VO
      */
     @PostMapping("/list/page/vo")
-    public MrsResult<?> listPicturePageVo(@RequestBody PictureQueryRequest queryRequest, HttpServletRequest httpServletRequest) {
+    public MrsResult<?> listPicturePageVo(
+            @RequestBody PictureQueryRequest queryRequest,
+            HttpServletRequest httpServletRequest) {
         if (queryRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
@@ -284,12 +293,14 @@ public class PictureController {
         } else {
             // 私有空间
             queryRequest.setNullSpaceId(false);
-            User loggedUser = userService.getLoginUser(httpServletRequest);
-            Space space = spaceService.getById(spaceId);
-            ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND, "空间不存在");
-            if (!Objects.equals(space.getUserId(), loggedUser.getId())) {
-                throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
-            }
+//            User loggedUser = userService.getLoginUser(httpServletRequest);
+//            Space space = spaceService.getById(spaceId);
+//            ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND, "空间不存在");
+//            if (!Objects.equals(space.getUserId(), loggedUser.getId())) {
+//                throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
+//            }
+            boolean canView = StpKit.SPACE.hasPermission(SpaceUserPermissionConstants.PICTURE_VIEW);
+            ThrowUtils.throwIf(!canView, ErrorCode.AUTHORIZATION_ERROR);
         }
         Page<Picture> picturePage = pictureService.getPicturePage(queryRequest);
         Page<PictureVo> voPage = pictureService.getPictureVoPage(picturePage, httpServletRequest);
@@ -400,6 +411,7 @@ public class PictureController {
      * @return .
      */
     @PostMapping("/edit")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_EDIT)
     public MrsResult<?> editPicture(@RequestBody PictureEditRequest editRequest, HttpServletRequest servletRequest) {
         if (editRequest == null || editRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -417,6 +429,7 @@ public class PictureController {
      * @return .
      */
     @PostMapping("/edit/batch")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_EDIT)
     public MrsResult<?> editBatchPicture(@RequestBody PictureEditBatchRequest editRequest, HttpServletRequest servletRequest) {
         User loginUser = userService.getLoginUser(servletRequest);
         boolean updated = pictureService.editPictureBatch(editRequest, loginUser);
@@ -433,7 +446,8 @@ public class PictureController {
      * @param servletRequest HttpServlet请求对象
      * @return .
      */
-    @AuthCheck(mustRole = UserRole.USER)
+    // @AuthCheck(mustRole = UserRole.USER)
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_EDIT)
     @PostMapping("/out_painting/create_task")
     public MrsResult<?> createOutPaintingTask(
             @RequestBody PictureOutPaintingTaskRequest taskRequest,
@@ -452,7 +466,8 @@ public class PictureController {
      * @param taskId AI扩图的任务ID
      * @return .
      */
-    @AuthCheck(mustRole = UserRole.USER)
+    // @AuthCheck(mustRole = UserRole.USER)
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_EDIT)
     @GetMapping("/out_painting/get_task")
     public MrsResult<?> queryOutPaintingTask(
             @RequestParam(name = "taskId") String taskId) {
