@@ -17,7 +17,6 @@ import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.manager.auth.SpaceUserAuthManager;
 import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.service.IUserService;
-import cloud.marisa.picturebackend.util.MrsAuthUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.util.ObjectUtils;

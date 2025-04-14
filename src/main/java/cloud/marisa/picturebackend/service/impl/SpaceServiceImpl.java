@@ -52,6 +52,10 @@ public class SpaceServiceImpl
     @Autowired
     private TransactionTemplate transactionTemplate;
 
+    // @Lazy
+    // @Autowired
+    // private DynamicShardingManager dynamicShardingManager;
+
     private final Map<Long, Object> locksMap = new ConcurrentHashMap<>();
 
     @Override
@@ -179,6 +183,8 @@ public class SpaceServiceImpl
                             throw new BusinessException(ErrorCode.OPERATION_ERROR, "创建团队成员记录失败");
                         }
                     }
+                    // 尝试创建分表
+                    // dynamicShardingManager.createSpacePictureTable(space);
                     if (!spaceSaved) {
                         log.error("创建空间失败");
                         throw new BusinessException(ErrorCode.OPERATION_ERROR);

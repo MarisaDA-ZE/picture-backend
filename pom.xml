@@ -185,6 +185,13 @@
             <artifactId>commons-pool2</artifactId>
         </dependency>
 
+        <!-- 分库分表 -->
+        <dependency>
+            <groupId>org.apache.shardingsphere</groupId>
+            <artifactId>shardingsphere-jdbc-core-spring-boot-starter</artifactId>
+            <version>5.2.0</version>
+        </dependency>
+
 
         <!-- MinIO分布式存储引擎 -->
         <!-- https://mvnrepository.com/artifact/io.minio/minio -->
