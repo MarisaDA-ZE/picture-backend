@@ -22,6 +22,7 @@ import cloud.marisa.picturebackend.util.EnumUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
@@ -34,6 +35,7 @@ import java.util.stream.Collectors;
  * @description 针对表【space_user(空间-用户的关联表)】的数据库操作Service实现
  * @createDate 2025-04-13 16:46:09
  */
+@Log4j2
 @Service
 public class SpaceUserServiceImpl
         extends ServiceImpl<SpaceUserMapper, SpaceUser>
@@ -44,6 +46,9 @@ public class SpaceUserServiceImpl
 
     @Autowired
     private ISpaceService spaceService;
+
+    @Autowired
+    private ISpaceUserService spaceUserService;
 
     @Override
     public SpaceUser getSpaceUser(
@@ -87,6 +92,7 @@ public class SpaceUserServiceImpl
         // 校验参数
         validSpaceUser(queryRequest);
         LambdaQueryWrapper<SpaceUser> queryWrapper = new LambdaQueryWrapper<>();
+        getQueryWrapper(queryRequest, queryWrapper);
         return this.list(queryWrapper);
     }
 
@@ -136,8 +142,19 @@ public class SpaceUserServiceImpl
             User loginUser) {
         ThrowUtils.throwIf(addRequest == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
+        log.info("addSpaceUser: {}", addRequest);
         SpaceUser spaceUser = new SpaceUser();
         BeanUtils.copyProperties(addRequest, spaceUser);
+
+        Long spaceId = spaceUser.getSpaceId();
+        String roleString = spaceUser.getSpaceRole();
+        if (roleString == null && spaceId != null) {
+            SpaceUser dbSpaceUser = spaceUserService.lambdaQuery()
+                    .eq(SpaceUser::getSpaceId, spaceUser.getSpaceId())
+                    .eq(SpaceUser::getUserId, loginUser.getId())
+                    .one();
+            spaceUser.setSpaceRole(dbSpaceUser.getSpaceRole());
+        }
         validSpaceUser(spaceUser, true);
         boolean saved = this.save(spaceUser);
         if (!saved) {
@@ -159,7 +176,7 @@ public class SpaceUserServiceImpl
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         SpaceUser dbSpaceUser = this.getById(id);
-        if(dbSpaceUser == null){
+        if (dbSpaceUser == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
 
@@ -210,6 +227,7 @@ public class SpaceUserServiceImpl
         MrsSpaceRole spaceRole = EnumUtil.fromValue(roleString, MrsSpaceRole.class);
         // 创建时
         if (isCreate) {
+            log.info("团队空间用户信息: {}", spaceUser);
             ThrowUtils.throwIf(spaceRole == null,
                     ErrorCode.PARAMS_ERROR, "未知的空间角色");
             if (spaceId == null || spaceId <= 0) {

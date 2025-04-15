@@ -135,10 +135,10 @@ public class PictureServiceImpl extends ServiceImpl<PictureMapper, Picture>
                 throw new BusinessException(ErrorCode.NOT_FOUND, "空间不存在");
             }
             // 用户只能上传到自己的空间
-            Long userId = loginUser.getId();
-            if (!Objects.equals(space.getUserId(), userId)) {
-                throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
-            }
+//            Long userId = loginUser.getId();
+//            if (!Objects.equals(space.getUserId(), userId)) {
+//                throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
+//            }
         } else {
             space = null;
         }

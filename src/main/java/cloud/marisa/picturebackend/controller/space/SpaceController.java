@@ -1,6 +1,7 @@
 package cloud.marisa.picturebackend.controller.space;
 
 import cloud.marisa.picturebackend.annotations.AuthCheck;
+import cloud.marisa.picturebackend.annotations.SaSpaceCheckPermission;
 import cloud.marisa.picturebackend.common.MrsResult;
 import cloud.marisa.picturebackend.entity.dao.Space;
 import cloud.marisa.picturebackend.entity.dao.User;
@@ -15,6 +16,7 @@ import cloud.marisa.picturebackend.enums.UserRole;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.manager.auth.SpaceUserAuthManager;
+import cloud.marisa.picturebackend.manager.auth.constant.SpaceUserPermissionConstants;
 import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.service.IUserService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -76,6 +78,7 @@ public class SpaceController {
      * @return 空间对象
      */
     @GetMapping("/get/vo")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_VIEW)
     public MrsResult<?> getOneVo(@RequestParam Long id, HttpServletRequest servletRequest) {
         if (id == null || id <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -85,11 +88,11 @@ public class SpaceController {
             throw new BusinessException(ErrorCode.NOT_FOUND, "空间不存在");
         }
         User loggedUser = userService.getLoginUser(servletRequest);
-        Long userId = loggedUser.getId();
-        boolean isAdmin = userService.hasPermission(loggedUser, UserRole.ADMIN);
-        if (!Objects.equals(space.getUserId(), userId) && !isAdmin) {
-            throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
-        }
+//        Long userId = loggedUser.getId();
+//        boolean isAdmin = userService.hasPermission(loggedUser, UserRole.ADMIN);
+//        if (!Objects.equals(space.getUserId(), userId) && !isAdmin) {
+//            throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
+//        }
         SpaceVo vo = SpaceVo.toVo(space);
         List<String> permissions = spaceUserAuthManager.getPermissionList(space, loggedUser);
         vo.setPermissionList(permissions);
@@ -126,6 +129,7 @@ public class SpaceController {
      * @return 空间VO分页对象
      */
     @PostMapping("/list/page/vo")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_VIEW)
     public MrsResult<?> queryPageVo(
             @RequestBody SpaceQueryRequest queryRequest,
             HttpServletRequest servletRequest) {
@@ -150,6 +154,7 @@ public class SpaceController {
      * @return 是否更新成功
      */
     @PostMapping("/add")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_UPLOAD)
     public MrsResult<?> addSpace(
             @RequestBody SpaceAddRequest addRequest,
             HttpServletRequest servletRequest) {
