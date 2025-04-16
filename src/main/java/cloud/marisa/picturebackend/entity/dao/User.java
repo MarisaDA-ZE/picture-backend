@@ -116,35 +116,4 @@ public class User implements Serializable {
     @TableField("edit_time")
     @MrsFieldName("editTime")
     private Date editTime;
-
-
-    /**
-     * 将User对象转换为UserVo对象
-     *
-     * @param user 用户DAO对象
-     * @return VO对象
-     */
-    public static UserVo toVO(User user) {
-        if (ObjectUtils.isEmpty(user)) {
-            return null;
-        }
-        UserVo userVo = new UserVo();
-        BeanUtils.copyProperties(user, userVo);
-        return userVo;
-    }
-
-    /**
-     * 将User对象转换为UserVo对象
-     *
-     * @param users 用户DAO 列表
-     * @return VO列表
-     */
-    public static List<UserVo> toVoList(List<User> users) {
-        if (CollectionUtils.isEmpty(users)) {
-            return new ArrayList<>();
-        }
-        return users.stream()
-                .map(User::toVO)
-                .collect(Collectors.toList());
-    }
 }

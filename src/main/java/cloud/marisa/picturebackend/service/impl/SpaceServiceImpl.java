@@ -100,7 +100,7 @@ public class SpaceServiceImpl
         }
         // 根据用户ID，批量查询用户信息并转换成UserVo对象，最后按照UserId进行分组
         Map<Long, List<UserVo>> userVos = userService.listByIds(ids)
-                .stream().map(User::toVO)
+                .stream().map(UserVo::toVO)
                 .collect(Collectors.groupingBy(userVo -> (userVo != null) ? userVo.getId() : -1));
         // 往空间Vo对象列表中添加用户信息
         List<SpaceVo> spaceVos = records.stream().map(space -> {

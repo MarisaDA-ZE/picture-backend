@@ -73,7 +73,7 @@ public class UserController {
     @GetMapping("/get/login")
     MrsResult<?> getLoginUser(HttpServletRequest servletRequest) {
         User loginUser = userService.getLoginUser(servletRequest);
-        return MrsResult.ok(User.toVO(loginUser));
+        return MrsResult.ok(UserVo.toVO(loginUser));
     }
 
     /**

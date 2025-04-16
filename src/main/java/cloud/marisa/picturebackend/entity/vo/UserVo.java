@@ -1,10 +1,17 @@
 package cloud.marisa.picturebackend.entity.vo;
 
+import cloud.marisa.picturebackend.entity.dao.User;
 import lombok.Data;
 import lombok.ToString;
+import org.springframework.beans.BeanUtils;
+import org.springframework.util.CollectionUtils;
+import org.springframework.util.ObjectUtils;
 
 import java.io.Serializable;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * @author MarisaDAZE
@@ -75,4 +82,36 @@ public class UserVo implements Serializable {
      * 编辑时间
      */
     private Date editTime;
+
+
+
+    /**
+     * 将User对象转换为UserVo对象
+     *
+     * @param user 用户DAO对象
+     * @return VO对象
+     */
+    public static UserVo toVO(User user) {
+        if (ObjectUtils.isEmpty(user)) {
+            return null;
+        }
+        UserVo userVo = new UserVo();
+        BeanUtils.copyProperties(user, userVo);
+        return userVo;
+    }
+
+    /**
+     * 将User对象转换为UserVo对象
+     *
+     * @param users 用户DAO 列表
+     * @return VO列表
+     */
+    public static List<UserVo> toVoList(List<User> users) {
+        if (CollectionUtils.isEmpty(users)) {
+            return new ArrayList<>();
+        }
+        return users.stream()
+                .map(UserVo::toVO)
+                .collect(Collectors.toList());
+    }
 }

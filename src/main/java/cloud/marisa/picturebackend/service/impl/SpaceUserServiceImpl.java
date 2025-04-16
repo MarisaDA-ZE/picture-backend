@@ -135,7 +135,7 @@ public class SpaceUserServiceImpl
             Long userId = vo.getUserId();
             if (userId != null && userId > 0) {
                 User user = usersMap.get(userId).get(0);
-                vo.setUser(User.toVO(user));
+                vo.setUser(UserVo.toVO(user));
             }
             Long spaceId = vo.getSpaceId();
             if (spaceId != null && spaceId > 0) {

@@ -890,8 +890,7 @@ public class PictureServiceImpl
             User user = userService.getById(userId);
             List<String> permissions = spaceUserAuthManager.getPermissionList(space, loggedUser);
             vo.setPermissionList(permissions);
-            // TODO: user 要改
-            vo.setUserVo(User.toVO(user));
+            vo.setUserVo(UserVo.toVO(user));
         }
         log.info("pictureVo: {}", vo);
         return vo;
@@ -916,7 +915,7 @@ public class PictureServiceImpl
         }
         // 根据ID查询用户列表，并按照 userId-User的形式映射成Map
         Map<Long, List<UserVo>> userVos = userService.listByIds(userIds).stream()
-                .map(User::toVO)
+                .map(UserVo::toVO)
                 .collect(Collectors.groupingBy(userVo -> (userVo != null) ? userVo.getId() : -1));
         // 组装图片Vo列表
         List<PictureVo> pictureVos = records.stream().map(picture -> {

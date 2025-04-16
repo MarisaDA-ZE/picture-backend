@@ -18,9 +18,12 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.BeanUtils;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
@@ -30,6 +33,7 @@ import javax.servlet.http.HttpServletRequest;
 import java.lang.Object;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 import static cloud.marisa.picturebackend.common.Constants.USER_LOGIN;
 
@@ -44,6 +48,9 @@ import static cloud.marisa.picturebackend.common.Constants.USER_LOGIN;
 public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         implements IUserService {
 
+    /**
+     * Bcrypt加密工具
+     */
     private final PasswordEncoder passwordEncoder;
 
     @Override
@@ -92,7 +99,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         StpKit.SPACE.login(dbUser.getId());
         StpKit.SPACE.getSession().set(USER_LOGIN, dbUser);
         // 返回VO对象
-        return User.toVO(dbUser);
+        return UserVo.toVO(dbUser);
     }
 
     @Override
@@ -144,7 +151,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         if (!saved) {
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "创建失败，数据库错误。");
         }
-        return User.toVO(user);
+        return UserVo.toVO(user);
     }
 
     @Override
@@ -169,7 +176,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         if (!updated) {
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "修改失败，数据库错误。");
         }
-        return User.toVO(dbUser);
+        return UserVo.toVO(dbUser);
     }
 
     @Override
@@ -182,7 +189,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         int size = queryUserRequest.getPageSize();
         Page<User> pageResult = this.page(new Page<>(current, size), queryWrapper);
         Page<UserVo> result = new Page<>(current, size, pageResult.getTotal());
-        result.setRecords(User.toVoList(pageResult.getRecords()));
+        result.setRecords(UserVo.toVoList(pageResult.getRecords()));
         return result;
     }
 
@@ -195,7 +202,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         if (ObjectUtils.isEmpty(dbUser)) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "用户不存在");
         }
-        return User.toVO(dbUser);
+        return UserVo.toVO(dbUser);
     }
 
     @Override

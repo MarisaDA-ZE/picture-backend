@@ -1,6 +1,7 @@
 package cloud.marisa.picturebackend.websocket.interceptor;
 
 import cloud.marisa.picturebackend.entity.dao.User;
+import cloud.marisa.picturebackend.entity.vo.UserVo;
 import cloud.marisa.picturebackend.util.EnumUtil;
 import cloud.marisa.picturebackend.websocket.entity.PictureEditRequestMessage;
 import cloud.marisa.picturebackend.websocket.entity.PictureEditResponseMessage;
@@ -63,7 +64,7 @@ public class PictureEditHandler extends TextWebSocketHandler {
         responseMessage.setType(PictureEditMessageTypeEnum.INFO.getValue());
         String message = String.format("用户 %s 进入编辑状态", user.getUserName());
         responseMessage.setMessage(message);
-        responseMessage.setUser(User.toVO(user));
+        responseMessage.setUser(UserVo.toVO(user));
         // 进行广播操作
         broadcastToPicture(pictureId, responseMessage);
 
@@ -159,7 +160,7 @@ public class PictureEditHandler extends TextWebSocketHandler {
                 responseMessage.setType(PictureEditMessageTypeEnum.ERROR.getValue());
                 String format = String.format("消息类型错误 %s", sType);
                 responseMessage.setMessage(format);
-                responseMessage.setUser(User.toVO(user));
+                responseMessage.setUser(UserVo.toVO(user));
                 session.sendMessage(new TextMessage(JSONUtil.toJsonStr(responseMessage)));
         }
     }
@@ -186,7 +187,7 @@ public class PictureEditHandler extends TextWebSocketHandler {
         PictureEditResponseMessage responseMessage = PictureEditResponseMessage.builder()
                 .type(PictureEditMessageTypeEnum.INFO.getValue())
                 .message(message)
-                .user(User.toVO(user))
+                .user(UserVo.toVO(user))
                 .build();
         // 发送广播消息
         broadcastToPicture(pictureId, responseMessage);
@@ -207,7 +208,7 @@ public class PictureEditHandler extends TextWebSocketHandler {
         PictureEditResponseMessage responseMessage = PictureEditResponseMessage.builder()
                 .type(PictureEditMessageTypeEnum.ENTER_EDIT.getValue())
                 .message(message)
-                .user(User.toVO(user))
+                .user(UserVo.toVO(user))
                 .build();
         broadcastToPicture(pictureId, responseMessage);
     }
@@ -232,7 +233,7 @@ public class PictureEditHandler extends TextWebSocketHandler {
             PictureEditResponseMessage responseMessage = PictureEditResponseMessage.builder()
                     .type(PictureEditMessageTypeEnum.EDIT_ACTION.getValue())
                     .message(message)
-                    .user(User.toVO(user))
+                    .user(UserVo.toVO(user))
                     .build();
             // 发送广播消息
             broadcastToPicture(pictureId, responseMessage);
@@ -255,7 +256,7 @@ public class PictureEditHandler extends TextWebSocketHandler {
         PictureEditResponseMessage responseMessage = PictureEditResponseMessage.builder()
                 .type(PictureEditMessageTypeEnum.EXIT_EDIT.getValue())
                 .message(message)
-                .user(User.toVO(user))
+                .user(UserVo.toVO(user))
                 .build();
         // 发送广播消息
         broadcastToPicture(pictureId, responseMessage);
