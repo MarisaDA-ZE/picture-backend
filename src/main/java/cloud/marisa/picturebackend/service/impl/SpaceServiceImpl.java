@@ -23,7 +23,6 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
@@ -33,18 +32,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.ObjectUtils;
 
+import javax.annotation.Resource;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
+ * 当有循环依赖的地方时，不要使用构造函数注入，此时应该使用属性注入或者Setter注入
+ *
  * @author Marisa
  * @description 针对表【space(空间表)】的数据库操作Service实现
  * @createDate 2025-04-04 11:02:54
  */
 @Log4j2
 @Service
-@RequiredArgsConstructor
 public class SpaceServiceImpl
         extends ServiceImpl<SpaceMapper, Space>
         implements ISpaceService {
@@ -52,23 +53,27 @@ public class SpaceServiceImpl
     /**
      * 用户服务
      */
-    private final IUserService userService;
+    @Resource
+    private IUserService userService;
 
     /**
      * 团队空间服务
      */
     @Lazy
-    private final ISpaceUserService spaceUserService;
+    @Resource
+    private ISpaceUserService spaceUserService;
 
     /**
      * 区域事务模板
      */
-    private final TransactionTemplate transactionTemplate;
+    @Resource
+    private TransactionTemplate transactionTemplate;
 
     /**
      * Redisson分布式锁
      */
-    private final RedissonClient redissonClient;
+    @Resource
+    private RedissonClient redissonClient;
 
     @Override
     public Page<Space> getSpacePage(SpaceQueryRequest queryRequest, User loggedUser) {

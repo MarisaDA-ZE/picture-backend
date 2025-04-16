@@ -22,23 +22,24 @@ import cloud.marisa.picturebackend.util.EnumUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.BeanUtils;
 import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
+import javax.annotation.Resource;
 import java.util.*;
 import java.util.stream.Collectors;
 
 /**
+ * 当有循环依赖的地方时，不要使用构造函数注入，此时应该使用属性注入或者Setter注入
+ *
  * @author Marisa
  * @description 针对表【space_user(空间-用户的关联表)】的数据库操作Service实现
  * @createDate 2025-04-13 16:46:09
  */
 @Log4j2
 @Service
-@RequiredArgsConstructor
 public class SpaceUserServiceImpl
         extends ServiceImpl<SpaceUserMapper, SpaceUser>
         implements ISpaceUserService {
@@ -46,13 +47,15 @@ public class SpaceUserServiceImpl
     /**
      * 用户服务
      */
-    private final IUserService userService;
+    @Resource
+    private IUserService userService;
 
     /**
      * 个人空间服务
      */
     @Lazy
-    private final ISpaceService spaceService;
+    @Resource
+    private ISpaceService spaceService;
 
     @Override
     public SpaceUser getSpaceUser(
