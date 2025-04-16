@@ -7,7 +7,7 @@ import cloud.marisa.picturebackend.entity.dto.analyze.request.*;
 import cloud.marisa.picturebackend.entity.dto.analyze.request.base.SpaceAnalyzeRequest;
 import cloud.marisa.picturebackend.entity.dto.analyze.response.*;
 import cloud.marisa.picturebackend.enums.MrsTimeDimension;
-import cloud.marisa.picturebackend.enums.UserRole;
+import cloud.marisa.picturebackend.enums.MrsUserRole;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.exception.ThrowUtils;
@@ -22,8 +22,8 @@ import cn.hutool.core.util.ObjUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.LinkedHashMap;
@@ -38,17 +38,28 @@ import java.util.stream.Collectors;
  */
 @Log4j2
 @Service
+@RequiredArgsConstructor
 public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
 
-    @Autowired
-    private IUserService userService;
+    /**
+     * 用户服务
+     */
+    private final IUserService userService;
 
-    @Autowired
-    private IPictureService pictureService;
-    @Autowired
-    private PictureMapper pictureMapper;
-    @Autowired
-    private ISpaceService spaceService;
+    /**
+     * 图片服务
+     */
+    private final IPictureService pictureService;
+
+    /**
+     * 空间服务
+     */
+    private final ISpaceService spaceService;
+
+    /**
+     * 图片Mapper对象
+     */
+    private final PictureMapper pictureMapper;
 
     @Override
     public SpaceUsageAnalyzeResponse getSpaceUsageAnalyze(
@@ -56,7 +67,7 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
             User loginUser) {
         // 基础参数校验
         checkSpaceAnalyzeAuth(analyzeRequest, loginUser);
-        // 公共空间或者全部空间的使用统计
+        // 查询 公共空间 或者 所有空间 的使用统计
         if (analyzeRequest.isQueryPublic() || analyzeRequest.isQueryAll()) {
             LambdaQueryWrapper<Picture> queryWrapper = new LambdaQueryWrapper<>();
             queryWrapper.select(Picture::getPicSize);
@@ -82,7 +93,7 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
         }
         // 用户空间的使用统计
         Long spaceId = analyzeRequest.getSpaceId();
-        ThrowUtils.throwIf(spaceId == null || spaceId < 0, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(spaceId == null || spaceId <= 0, ErrorCode.PARAMS_ERROR);
         Space dbSpace = spaceService.getById(spaceId);
         ThrowUtils.throwIf(dbSpace == null, ErrorCode.NOT_FOUND);
         // 统计私人空间使用情况
@@ -168,7 +179,7 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
                     if (size < 200 * 1024) {
                         key = "0-200KB";
                     } else if (size < 1024 * 1024) {
-                        key = "200-1MB";
+                        key = "200KB-1MB";
                     } else if (size < 5 * 1024 * 1024) {
                         key = "1-5MB";
                     } else if (size < 10 * 1024 * 1024) {
@@ -197,7 +208,7 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
         fillQueryWrapper(analyzeRequest, queryWrapper);
         Long userId = analyzeRequest.getUserId();
         if (ObjUtil.isNotNull(userId) && userId > 0) {
-            boolean isAdmin = userService.hasPermission(loginUser, UserRole.ADMIN);
+            boolean isAdmin = userService.hasPermission(loginUser, MrsUserRole.ADMIN);
             if (!loginUser.getId().equals(userId) && !isAdmin) {
                 throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR);
             }
@@ -222,7 +233,7 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
         }
         // 分组并排序
         queryWrapper.groupBy("period").orderByAsc("period");
-        log.info("最终SQL {}", queryWrapper.getTargetSql());
+        log.info("最终的分析SQL {}", queryWrapper.getTargetSql());
         // 查询并返回统计结果
         return pictureService.getBaseMapper().selectMaps(queryWrapper)
                 .stream()
@@ -244,7 +255,7 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
         queryWrapper.select(Space::getId, Space::getSpaceName,
                         Space::getUserId, Space::getTotalSize)
                 .orderByDesc(Space::getTotalSize)
-                // 取前N个
+                // 取前N个，一般是10
                 .last("LIMIT " + analyzeRequest.getTopN());
 
         return spaceService.list(queryWrapper);
@@ -257,7 +268,7 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
         ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
         boolean queryPublic = analyzeRequest.isQueryPublic();
         boolean queryAll = analyzeRequest.isQueryAll();
-        boolean isAdmin = userService.hasPermission(loginUser, UserRole.ADMIN);
+        boolean isAdmin = userService.hasPermission(loginUser, MrsUserRole.ADMIN);
         // 分析公共空间或者分析全部空间需要管理员权限
         if ((queryPublic || queryAll) && !isAdmin) {
             throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "暂无权限");

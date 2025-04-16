@@ -1,6 +1,6 @@
 package cloud.marisa.picturebackend.annotations;
 
-import cloud.marisa.picturebackend.enums.UserRole;
+import cloud.marisa.picturebackend.enums.MrsUserRole;
 
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
@@ -21,5 +21,5 @@ public @interface AuthCheck {
      *
      * @return .
      */
-    UserRole mustRole() default UserRole.GUEST;
+    MrsUserRole mustRole() default MrsUserRole.GUEST;
 }

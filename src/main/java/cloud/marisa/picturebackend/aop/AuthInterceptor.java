@@ -2,7 +2,7 @@ package cloud.marisa.picturebackend.aop;
 
 import cloud.marisa.picturebackend.annotations.AuthCheck;
 import cloud.marisa.picturebackend.entity.dao.User;
-import cloud.marisa.picturebackend.enums.UserRole;
+import cloud.marisa.picturebackend.enums.MrsUserRole;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.service.IUserService;
@@ -48,8 +48,8 @@ public class AuthInterceptor {
         }
         HttpServletRequest httpServletRequest = ((ServletRequestAttributes) requestAttributes).getRequest();
         User loginUser = userService.getLoginUser(httpServletRequest);
-        UserRole currentRole = EnumUtil.fromValue(loginUser.getUserRole(), UserRole.class);
-        UserRole mustRole = authCheck.mustRole();
+        MrsUserRole currentRole = EnumUtil.fromValue(loginUser.getUserRole(), MrsUserRole.class);
+        MrsUserRole mustRole = authCheck.mustRole();
 
         // 不要权限
         if (ObjectUtils.isEmpty(mustRole)) {

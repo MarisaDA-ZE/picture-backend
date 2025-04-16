@@ -5,8 +5,7 @@ import cloud.marisa.picturebackend.entity.dao.SpaceUser;
 import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.enums.MrsSpaceRole;
 import cloud.marisa.picturebackend.enums.MrsSpaceType;
-import cloud.marisa.picturebackend.enums.UserRole;
-import cloud.marisa.picturebackend.manager.auth.constant.SpaceUserPermissionConstants;
+import cloud.marisa.picturebackend.enums.MrsUserRole;
 import cloud.marisa.picturebackend.manager.auth.entity.SpaceUserAuthConfig;
 import cloud.marisa.picturebackend.manager.auth.entity.SpaceUserRole;
 import cloud.marisa.picturebackend.service.ISpaceUserService;
@@ -20,7 +19,6 @@ import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 /**
@@ -69,7 +67,7 @@ public class SpaceUserAuthManager {
      */
     public List<String> getPermissionList(Space space, User loginUser) {
         List<String> adminPermissions = getPermissionsByRole(MrsSpaceRole.ADMIN.getValue());
-        boolean isAdmin = userService.hasPermission(loginUser, UserRole.ADMIN);
+        boolean isAdmin = userService.hasPermission(loginUser, MrsUserRole.ADMIN);
         // 公共空间
         if (space == null) {
             if (isAdmin) {

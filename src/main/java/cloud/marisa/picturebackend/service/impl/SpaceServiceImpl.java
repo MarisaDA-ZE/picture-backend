@@ -12,25 +12,29 @@ import cloud.marisa.picturebackend.entity.vo.UserVo;
 import cloud.marisa.picturebackend.enums.*;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
+import cloud.marisa.picturebackend.exception.ThrowUtils;
 import cloud.marisa.picturebackend.mapper.SpaceMapper;
 import cloud.marisa.picturebackend.service.ISpaceUserService;
 import cloud.marisa.picturebackend.service.IUserService;
 import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.util.EnumUtil;
-import cloud.marisa.picturebackend.util.MrsAuthUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.ObjectUtils;
 
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -38,25 +42,33 @@ import java.util.stream.Collectors;
  * @description 针对表【space(空间表)】的数据库操作Service实现
  * @createDate 2025-04-04 11:02:54
  */
+@Log4j2
 @Service
+@RequiredArgsConstructor
 public class SpaceServiceImpl
         extends ServiceImpl<SpaceMapper, Space>
         implements ISpaceService {
 
-    @Autowired
-    private IUserService userService;
+    /**
+     * 用户服务
+     */
+    private final IUserService userService;
 
-    @Autowired
-    private ISpaceUserService spaceUserService;
+    /**
+     * 团队空间服务
+     */
+    @Lazy
+    private final ISpaceUserService spaceUserService;
 
-    @Autowired
-    private TransactionTemplate transactionTemplate;
+    /**
+     * 区域事务模板
+     */
+    private final TransactionTemplate transactionTemplate;
 
-    // @Lazy
-    // @Autowired
-    // private DynamicShardingManager dynamicShardingManager;
-
-    private final Map<Long, Object> locksMap = new ConcurrentHashMap<>();
+    /**
+     * Redisson分布式锁
+     */
+    private final RedissonClient redissonClient;
 
     @Override
     public Page<Space> getSpacePage(SpaceQueryRequest queryRequest, User loggedUser) {
@@ -71,9 +83,7 @@ public class SpaceServiceImpl
         long size = spacePage.getSize();
         long current = spacePage.getCurrent();
         long total = spacePage.getTotal();
-
-        Long userId = loggedUser.getId();
-        UserRole userRole = EnumUtil.fromValue(loggedUser.getUserRole(), UserRole.class);
+        // 根据空间的分页信息，分离出用户ID
         Page<SpaceVo> voPage = new Page<>(current, size, total);
         List<Space> records = spacePage.getRecords();
         Set<Long> ids = records.stream()
@@ -83,9 +93,11 @@ public class SpaceServiceImpl
             voPage.setRecords(new ArrayList<>());
             return voPage;
         }
+        // 根据用户ID，批量查询用户信息并转换成UserVo对象，最后按照UserId进行分组
         Map<Long, List<UserVo>> userVos = userService.listByIds(ids)
                 .stream().map(User::toVO)
                 .collect(Collectors.groupingBy(userVo -> (userVo != null) ? userVo.getId() : -1));
+        // 往空间Vo对象列表中添加用户信息
         List<SpaceVo> spaceVos = records.stream().map(space -> {
             SpaceVo vo = SpaceVo.toVo(space);
             Long spaceUserId = space.getUserId();
@@ -94,8 +106,12 @@ public class SpaceServiceImpl
             } else {
                 vo.setUser(null);
             }
-            List<String> permissions = MrsAuthUtil.getPermissions(spaceUserId, userId, userRole);
-            vo.setPermissionList(permissions);
+            /* 空间图片权限，但这里不加好像也没事
+             * Long userId = loggedUser.getId();
+             * MrsUserRole userRole = EnumUtil.fromValue(loggedUser.getUserRole(), MrsUserRole.class);
+             * List<String> permissions = MrsAuthUtil.getPermissions(spaceUserId, userId, userRole);
+             * vo.setPermissionList(permissions);
+             * */
             return vo;
         }).collect(Collectors.toList());
         voPage.setRecords(spaceVos);
@@ -108,12 +124,10 @@ public class SpaceServiceImpl
         BeanUtils.copyProperties(updateRequest, space);
         fillSpaceBySpaceLevel(space);
         validSpace(space, false);
-        Long sid = space.getId();
-        if (sid == null || sid < 0) {
-            throw new BusinessException(ErrorCode.NOT_FOUND, "空间不存在");
-        }
+        long spaceId = space.getId() == null ? 0L : space.getId();
+        ThrowUtils.throwIf(spaceId < 0, ErrorCode.PARAMS_ERROR);
         // 判断空间是否存在
-        boolean exists = this.lambdaQuery().eq(Space::getId, sid).exists();
+        boolean exists = this.lambdaQuery().eq(Space::getId, spaceId).exists();
         if (!exists) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "空间不存在");
         }
@@ -138,63 +152,70 @@ public class SpaceServiceImpl
             space.setSpaceLevel(SpaceLevelEnum.COMMON.getValue());
         }
         // 空间类型
-        MrsSpaceType spaceType = EnumUtil.fromValue(addRequest.getSpaceType(), MrsSpaceType.class);
-        if (spaceType == null) {
-            space.setSpaceType(MrsSpaceType.PRIVATE.getValue());
-        }
+        MrsSpaceType mst = EnumUtil.fromValue(addRequest.getSpaceType(), MrsSpaceType.class);
+        MrsSpaceType spaceType = (mst == null) ? MrsSpaceType.PRIVATE : mst;
+        space.setSpaceType(spaceType.getValue());
+        // 填充空间等级信息
         fillSpaceBySpaceLevel(space);
         validSpace(space, true);
         Long uid = loggedUser.getId();
         // 游客、封禁用户 -> 不能创建空间
-        // 普通用户   -> 普通空间
-        // 管理员用户  -> 所有空间
-        boolean isUser = userService.hasPermission(loggedUser, UserRole.USER);
-        boolean isAdmin = userService.hasPermission(loggedUser, UserRole.ADMIN);
+        // 普通用户 -> 普通空间
+        // 管理员用户 -> 所有空间
+        boolean isUser = userService.hasPermission(loggedUser, MrsUserRole.USER);
+        boolean isAdmin = userService.hasPermission(loggedUser, MrsUserRole.ADMIN);
         if (!isUser || (spaceLevel != SpaceLevelEnum.COMMON && !isAdmin)) {
             throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "暂无权限");
         }
-        Object lock = locksMap.computeIfAbsent(uid, k -> new Object());
-        // 这里可以进一步使用Redisson分布式锁
-        synchronized (lock) {
-            try {
-                // 开启一个事务
-                Long sid = transactionTemplate.execute(status -> {
-                    MrsSpaceType sType = spaceType;
-                    if (sType == null) {
-                        sType = MrsSpaceType.PRIVATE;
-                    }
-                    boolean exists = this.lambdaQuery()
-                            .eq(Space::getUserId, uid)
-                            .eq(Space::getSpaceType, sType.getValue())
-                            .exists();
-                    if (exists) {
-                        throw new BusinessException(ErrorCode.OPERATION_ERROR, "用户只能创建一个空间");
-                    }
-                    boolean spaceSaved = this.save(space);
-                    // 团队空间，创建相应记录
-                    if (sType == MrsSpaceType.TEAM) {
-                        SpaceUser spaceUser = new SpaceUser();
-                        spaceUser.setUserId(uid);
-                        spaceUser.setSpaceId(space.getId());
-                        spaceUser.setSpaceRole(MrsSpaceRole.ADMIN.getValue());
-                        boolean spaceUserSaved = spaceUserService.save(spaceUser);
-                        if (!spaceUserSaved) {
-                            log.error("创建团队成员记录失败");
-                            throw new BusinessException(ErrorCode.OPERATION_ERROR, "创建团队成员记录失败");
-                        }
-                    }
-                    // 尝试创建分表
-                    // dynamicShardingManager.createSpacePictureTable(space);
-                    if (!spaceSaved) {
-                        log.error("创建空间失败");
-                        throw new BusinessException(ErrorCode.OPERATION_ERROR);
-                    }
-                    return space.getId();
-                });
-                return (sid != null) ? sid : -1L;
-            } finally {
-                locksMap.remove(uid);
+        // 获取分布式锁
+        String key = "space:create:lock:" + uid;
+        log.info("获取分布式锁: {}", key);
+        RLock lock = redissonClient.getLock(key);
+        try {
+            // 获取锁失败时最多等待5秒，15秒后锁自动释放，防止死锁
+            if (!lock.tryLock(5, 15, TimeUnit.SECONDS)) {
+                log.error("获取分布式锁失败 {}", key);
+                throw new BusinessException(ErrorCode.OPERATION_ERROR, "获取分布式锁失败");
             }
+            // 开启一个事务
+            Long sid = transactionTemplate.execute(status -> {
+                boolean exists = this.lambdaQuery()
+                        .eq(Space::getUserId, uid)
+                        .eq(Space::getSpaceType, spaceType.getValue())
+                        .exists();
+                if (exists) {
+                    log.error("一个用户只能创建一个私人空间个一个团队空间");
+                    throw new BusinessException(ErrorCode.OPERATION_ERROR, "用户只能创建一个空间");
+                }
+                boolean spaceSaved = this.save(space);
+                // 创建的是团队空间，应该在 团队成员表 中创建相应记录
+                if (spaceType == MrsSpaceType.TEAM) {
+                    SpaceUser spaceUser = new SpaceUser();
+                    spaceUser.setUserId(uid);
+                    spaceUser.setSpaceId(space.getId());
+                    spaceUser.setSpaceRole(MrsSpaceRole.ADMIN.getValue());
+                    boolean spaceUserSaved = spaceUserService.save(spaceUser);
+                    if (!spaceUserSaved) {
+                        log.error("创建团队成员记录失败");
+                        throw new BusinessException(ErrorCode.OPERATION_ERROR, "创建团队成员记录失败");
+                    }
+                }
+                // 分库分表，目前内容少所以不分，分了性能很差
+                // 建议单表数据量200万以上再考虑分库分表
+                // 但目前设计的数据量是50万以内
+                // dynamicShardingManager.createSpacePictureTable(space);
+                if (!spaceSaved) {
+                    log.error("创建空间失败");
+                    throw new BusinessException(ErrorCode.OPERATION_ERROR);
+                }
+                return space.getId();
+            });
+            return (sid != null) ? sid : -1L;
+        } catch (InterruptedException e) {
+            log.error("获取分布式锁失败, key=" + key, e);
+            throw new RuntimeException(e);
+        } finally {
+            lock.unlock();
         }
     }
 
@@ -214,8 +235,9 @@ public class SpaceServiceImpl
 
     @Override
     public boolean deleteSpaceById(DeleteRequest deleteRequest, User loggedUser) {
-        Long spaceId = deleteRequest.getId();
-        if (spaceId == null || spaceId <= 0) {
+        Long _id = deleteRequest.getId();
+        Long spaceId = _id == null ? 0L : _id;
+        if (spaceId < 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         Space space = this.getById(spaceId);
@@ -223,8 +245,8 @@ public class SpaceServiceImpl
             throw new BusinessException(ErrorCode.NOT_FOUND, "空间不存在");
         }
         Long userId = loggedUser.getId();
-        boolean isAdmin = userService.hasPermission(loggedUser, UserRole.ADMIN);
-        if (!Objects.equals(space.getUserId(), userId) && !isAdmin) {
+        boolean isAdmin = userService.hasPermission(loggedUser, MrsUserRole.ADMIN);
+        if (!userId.equals(space.getUserId()) && !isAdmin) {
             throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
         }
         return this.removeById(spaceId);
@@ -233,9 +255,6 @@ public class SpaceServiceImpl
     @Override
     public SpaceVo getSpaceVo(Space space) {
         if (space == null) {
-            throw new BusinessException(ErrorCode.PARAMS_ERROR);
-        }
-        if (ObjectUtils.isEmpty(space)) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "空间不存在");
         }
         SpaceVo vo = SpaceVo.toVo(space);
@@ -257,8 +276,7 @@ public class SpaceServiceImpl
         String spaceName = space.getSpaceName();
         SpaceLevelEnum spaceLevelEnum = EnumUtil.fromValue(space.getSpaceLevel(), SpaceLevelEnum.class);
         MrsSpaceType spaceTypeEnum = EnumUtil.fromValue(space.getSpaceType(), MrsSpaceType.class);
-        // TODO:感觉这里的逻辑有点问题？但鱼哥是这么写的
-        // 需要创建空间
+        // 需要创建空间，参数都不应该为空
         if (isCreate) {
             if (StrUtil.isBlank(spaceName)) {
                 throw new BusinessException(ErrorCode.PARAMS_ERROR, "空间名称不能为空");
@@ -271,6 +289,8 @@ public class SpaceServiceImpl
             }
         }
         // 需要修改空间
+        // 部分参数如果不传，就沿用之前的
+        // 但如果传了但解析失败，就是坏参数，应该抛出异常
         if (StrUtil.isNotBlank(spaceName) && spaceName.length() > 32) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "空间名称过长");
         }
@@ -282,6 +302,13 @@ public class SpaceServiceImpl
         }
     }
 
+    /**
+     * 根据参数条件 构建一个查询Wrapper
+     *
+     * @param queryRequest 查询参数信息
+     * @param loggedUser   当前登录用户
+     * @return 构造好 的查询条件对象
+     */
     LambdaQueryWrapper<Space> getQueryWrapper(SpaceQueryRequest queryRequest, User loggedUser) {
         LambdaQueryWrapper<Space> queryWrapper = new LambdaQueryWrapper<>();
         // 空间ID，等值匹配
@@ -289,8 +316,7 @@ public class SpaceServiceImpl
         if (spaceId != null && spaceId > 0) {
             queryWrapper.eq(Space::getId, spaceId);
         }
-
-        boolean isAdmin = userService.hasPermission(loggedUser, UserRole.ADMIN);
+        boolean isAdmin = userService.hasPermission(loggedUser, MrsUserRole.ADMIN);
         // 管理员可以查所有人的
         if (isAdmin) {
             // 用户ID，等值匹配

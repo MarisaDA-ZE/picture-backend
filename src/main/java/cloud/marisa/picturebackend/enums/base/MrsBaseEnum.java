@@ -1,4 +1,4 @@
-package cloud.marisa.picturebackend.enums;
+package cloud.marisa.picturebackend.enums.base;
 
 /**
  * @author MarisaDAZE

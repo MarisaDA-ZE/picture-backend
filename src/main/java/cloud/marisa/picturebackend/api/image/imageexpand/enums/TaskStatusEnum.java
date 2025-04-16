@@ -1,6 +1,6 @@
 package cloud.marisa.picturebackend.api.image.imageexpand.enums;
 
-import cloud.marisa.picturebackend.enums.MrsBaseEnum;
+import cloud.marisa.picturebackend.enums.base.MrsBaseEnum;
 import lombok.Getter;
 
 /**

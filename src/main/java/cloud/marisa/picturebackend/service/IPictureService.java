@@ -31,14 +31,15 @@ public interface IPictureService extends IService<Picture> {
     String upload(MultipartFile multipartFile);
 
     /**
-     * 上传一张图片到数据库
+     * 创建或更新一张图片到数据库
+     * <p>同时将文件保存到文件服务器</p>
      *
-     * @param inputSource   上传源（文件对象/URL）
+     * @param inputSource   上传内容（文件对象/URL）
      * @param uploadRequest 上传参数的DTO封装
      * @param loginUser     登录用户信息
      * @return 图片VO
      */
-    PictureVo uploadPicture(Object inputSource, PictureUploadRequest uploadRequest, User loginUser);
+    PictureVo saveOrUpdatePicture(Object inputSource, PictureUploadRequest uploadRequest, User loginUser);
 
     /**
      * 批量上传图片
@@ -103,7 +104,7 @@ public interface IPictureService extends IService<Picture> {
     boolean deletePicture(DeleteRequest deleteRequest, HttpServletRequest httpServletRequest);
 
     /**
-     * 图片DAO转VO
+     * 根据图片ID，获取这张图的Vo对象
      *
      * @param pid                图片ID
      * @param httpServletRequest httpServlet请求对象
@@ -120,7 +121,7 @@ public interface IPictureService extends IService<Picture> {
     Page<Picture> getPicturePage(PictureQueryRequest queryRequest);
 
     /**
-     * 获取图片信息（分页）
+     * 分页获取图片的Vo信息
      *
      * @param picturePage    DAO的分页对象
      * @param servletRequest HttpServlet请求对象
@@ -168,6 +169,7 @@ public interface IPictureService extends IService<Picture> {
      *
      * @param picture   图片
      * @param loginUser 登录用户
+     * @deprecated 已废弃
      */
     void checkPictureAuth(Picture picture, User loginUser);
 }

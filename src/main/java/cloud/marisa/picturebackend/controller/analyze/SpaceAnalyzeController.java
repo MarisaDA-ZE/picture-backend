@@ -6,34 +6,39 @@ import cloud.marisa.picturebackend.entity.dao.Space;
 import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.entity.dto.analyze.request.*;
 import cloud.marisa.picturebackend.entity.dto.analyze.response.*;
-import cloud.marisa.picturebackend.enums.UserRole;
+import cloud.marisa.picturebackend.enums.MrsUserRole;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.exception.ThrowUtils;
 import cloud.marisa.picturebackend.service.ISpaceAnalyzeService;
 import cloud.marisa.picturebackend.service.IUserService;
+import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-import javax.annotation.Resource;
 import javax.servlet.http.HttpServletRequest;
 import java.util.List;
 
 /**
  * @author MarisaDAZE
  * @description 空间统计信息
- * @date 2025/3/25
+ * @date 2025/4/13
  */
+@RequiredArgsConstructor
 @RestController
 @RequestMapping("/space/analyze")
 public class SpaceAnalyzeController {
 
-    @Resource
-    private IUserService userService;
+    /**
+     * 用户服务
+     */
+    private final IUserService userService;
 
-    @Resource
-    private ISpaceAnalyzeService spaceAnalyzeService;
+    /**
+     * 空间数据统计服务
+     */
+    private final ISpaceAnalyzeService spaceAnalyzeService;
 
     /**
      * * 获取空间使用情况
@@ -48,7 +53,8 @@ public class SpaceAnalyzeController {
             HttpServletRequest servletRequest) {
         ThrowUtils.throwIf(analyzeRequest == null, ErrorCode.PARAMS_ERROR);
         User loginUser = userService.getLoginUser(servletRequest);
-        SpaceUsageAnalyzeResponse analyze = spaceAnalyzeService.getSpaceUsageAnalyze(analyzeRequest, loginUser);
+        SpaceUsageAnalyzeResponse analyze =
+                spaceAnalyzeService.getSpaceUsageAnalyze(analyzeRequest, loginUser);
         return MrsResult.ok(analyze);
     }
 
@@ -65,7 +71,8 @@ public class SpaceAnalyzeController {
             HttpServletRequest servletRequest) {
         ThrowUtils.throwIf(analyzeRequest == null, ErrorCode.PARAMS_ERROR);
         User loginUser = userService.getLoginUser(servletRequest);
-        List<SpaceCategoryAnalyzeResponse> analyzeList = spaceAnalyzeService.getSpaceCategoryAnalyze(analyzeRequest, loginUser);
+        List<SpaceCategoryAnalyzeResponse> analyzeList =
+                spaceAnalyzeService.getSpaceCategoryAnalyze(analyzeRequest, loginUser);
         return MrsResult.ok(analyzeList);
     }
 
@@ -82,7 +89,8 @@ public class SpaceAnalyzeController {
             HttpServletRequest servletRequest) {
         ThrowUtils.throwIf(analyzeRequest == null, ErrorCode.PARAMS_ERROR);
         User loginUser = userService.getLoginUser(servletRequest);
-        List<SpaceTagAnalyzeResponse> analyzeList = spaceAnalyzeService.getSpaceTagAnalyze(analyzeRequest, loginUser);
+        List<SpaceTagAnalyzeResponse> analyzeList =
+                spaceAnalyzeService.getSpaceTagAnalyze(analyzeRequest, loginUser);
         return MrsResult.ok(analyzeList);
     }
 
@@ -99,7 +107,8 @@ public class SpaceAnalyzeController {
             HttpServletRequest servletRequest) {
         ThrowUtils.throwIf(analyzeRequest == null, ErrorCode.PARAMS_ERROR);
         User loginUser = userService.getLoginUser(servletRequest);
-        List<SpaceSizeAnalyzeResponse> analyzeList = spaceAnalyzeService.getSpaceSizeAnalyze(analyzeRequest, loginUser);
+        List<SpaceSizeAnalyzeResponse> analyzeList =
+                spaceAnalyzeService.getSpaceSizeAnalyze(analyzeRequest, loginUser);
         return MrsResult.ok(analyzeList);
     }
 
@@ -116,7 +125,8 @@ public class SpaceAnalyzeController {
             HttpServletRequest servletRequest) {
         ThrowUtils.throwIf(analyzeRequest == null, ErrorCode.PARAMS_ERROR);
         User loginUser = userService.getLoginUser(servletRequest);
-        List<SpaceUserAnalyzeResponse> analyzeList = spaceAnalyzeService.getSpaceUploadAnalyze(analyzeRequest, loginUser);
+        List<SpaceUserAnalyzeResponse> analyzeList =
+                spaceAnalyzeService.getSpaceUploadAnalyze(analyzeRequest, loginUser);
         return MrsResult.ok(analyzeList);
     }
 
@@ -128,13 +138,14 @@ public class SpaceAnalyzeController {
      * @return 用户上传行为分析结果
      */
     @PostMapping("/rank")
-    @AuthCheck(mustRole = UserRole.ADMIN)
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
     public MrsResult<?> getSpaceRankAnalyze(
             @RequestBody SpaceRankAnalyzeRequest analyzeRequest,
             HttpServletRequest servletRequest) {
         ThrowUtils.throwIf(analyzeRequest == null, ErrorCode.PARAMS_ERROR);
         User loginUser = userService.getLoginUser(servletRequest);
-        List<Space> analyzeList = spaceAnalyzeService.getSpaceSaveRankAnalyze(analyzeRequest, loginUser);
+        List<Space> analyzeList =
+                spaceAnalyzeService.getSpaceSaveRankAnalyze(analyzeRequest, loginUser);
         return MrsResult.ok(analyzeList);
     }
 

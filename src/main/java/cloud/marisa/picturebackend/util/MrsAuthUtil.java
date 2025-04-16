@@ -1,7 +1,7 @@
 package cloud.marisa.picturebackend.util;
 
 import cloud.marisa.picturebackend.entity.dao.User;
-import cloud.marisa.picturebackend.enums.UserRole;
+import cloud.marisa.picturebackend.enums.MrsUserRole;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -24,7 +24,7 @@ public class MrsAuthUtil {
      */
     public static List<String> getPermissions(Long uid, User loginUser) {
         Long u_uid = loginUser.getId();
-        UserRole currentRole = EnumUtil.fromValue(loginUser.getUserRole(), UserRole.class);
+        MrsUserRole currentRole = EnumUtil.fromValue(loginUser.getUserRole(), MrsUserRole.class);
         return getPermissions(uid, u_uid, currentRole);
     }
 
@@ -37,12 +37,12 @@ public class MrsAuthUtil {
      * @param currentRole 当前所属的角色
      * @return 权限列表
      */
-    public static List<String> getPermissions(Long uid, Long u_uid, UserRole currentRole) {
+    public static List<String> getPermissions(Long uid, Long u_uid, MrsUserRole currentRole) {
         ArrayList<String> permissions = new ArrayList<>();
         permissions.add("picture:view");
         permissions.add("picture:upload");
         // 是你自己的或者你是管理员
-        if (Objects.equals(uid, u_uid) || (currentRole != null && currentRole.moreThanRole(UserRole.ADMIN))) {
+        if (Objects.equals(uid, u_uid) || (currentRole != null && currentRole.moreThanRole(MrsUserRole.ADMIN))) {
             permissions.add("picture:edit");
             permissions.add("picture:delete");
         }

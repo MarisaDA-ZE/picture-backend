@@ -22,9 +22,10 @@ import cloud.marisa.picturebackend.util.EnumUtil;
 import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -37,18 +38,21 @@ import java.util.stream.Collectors;
  */
 @Log4j2
 @Service
+@RequiredArgsConstructor
 public class SpaceUserServiceImpl
         extends ServiceImpl<SpaceUserMapper, SpaceUser>
         implements ISpaceUserService {
 
-    @Autowired
-    private IUserService userService;
+    /**
+     * 用户服务
+     */
+    private final IUserService userService;
 
-    @Autowired
-    private ISpaceService spaceService;
-
-    @Autowired
-    private ISpaceUserService spaceUserService;
+    /**
+     * 个人空间服务
+     */
+    @Lazy
+    private final ISpaceService spaceService;
 
     @Override
     public SpaceUser getSpaceUser(
@@ -59,27 +63,29 @@ public class SpaceUserServiceImpl
         }
         // 校验参数
         validSpaceUser(queryRequest);
-        LambdaQueryWrapper<SpaceUser> queryWrapper = new LambdaQueryWrapper<>();
-        // 填充查询条件
-        getQueryWrapper(queryRequest, queryWrapper);
+        // 组装查询条件，并返回满足条件的成员信息
+        LambdaQueryWrapper<SpaceUser> queryWrapper = getQueryWrapper(queryRequest);
         return this.getOne(queryWrapper);
     }
 
     @Override
     public SpaceUserVo getSpaceUserVo(SpaceUser spaceUser) {
-        SpaceUserVo vo = SpaceUserVo.toVo(spaceUser);
+        SpaceUserVo spaceUserVo = SpaceUserVo.toVo(spaceUser);
+        // 获取用户信息
         Long userId = spaceUser.getUserId();
         if (userId != null && userId > 0) {
             UserVo userVo = userService.getUserVoById(userId);
-            vo.setUser(userVo);
+            spaceUserVo.setUser(userVo);
         }
+        // 获取空间信息
         Long spaceId = spaceUser.getSpaceId();
         if (spaceId != null && spaceId > 0) {
             Space space = spaceService.getById(spaceId);
+            // 这里还会查一次库
             SpaceVo spaceVo = spaceService.getSpaceVo(space);
-            vo.setSpace(spaceVo);
+            spaceUserVo.setSpace(spaceVo);
         }
-        return vo;
+        return spaceUserVo;
     }
 
     @Override
@@ -91,8 +97,8 @@ public class SpaceUserServiceImpl
         }
         // 校验参数
         validSpaceUser(queryRequest);
-        LambdaQueryWrapper<SpaceUser> queryWrapper = new LambdaQueryWrapper<>();
-        getQueryWrapper(queryRequest, queryWrapper);
+        // 构造查询条件并返回符合条件的团队空间成员列表
+        LambdaQueryWrapper<SpaceUser> queryWrapper = getQueryWrapper(queryRequest);
         return this.list(queryWrapper);
     }
 
@@ -103,6 +109,7 @@ public class SpaceUserServiceImpl
         }
         Set<Long> userIdSet = new HashSet<>();
         Set<Long> spaceIdSet = new HashSet<>();
+        // 先将团队空间成员对象用流的方式转换成团队空间成员Vo对象
         List<SpaceUserVo> voList = spaceUsers.stream()
                 .map(spaceUser -> {
                     Long userId = spaceUser.getUserId();
@@ -112,15 +119,15 @@ public class SpaceUserServiceImpl
                     return SpaceUserVo.toVo(spaceUser);
                 })
                 .collect(Collectors.toList());
-        // 批量查询用户
+        // 批量查询用户并按用户ID分组（UserId-User）
         Map<Long, List<User>> usersMap = userService.listByIds(userIdSet)
                 .stream()
                 .collect(Collectors.groupingBy(User::getId));
-        // 批量查询空间
+        // 批量查询空间并按空间ID分组（SpaceId-Space）
         Map<Long, List<Space>> spacesMap = spaceService.listByIds(spaceIdSet)
                 .stream()
                 .collect(Collectors.groupingBy(Space::getId));
-        // 组装结果
+        // 组装结果并返回
         voList.forEach(vo -> {
             Long userId = vo.getUserId();
             if (userId != null && userId > 0) {
@@ -130,6 +137,8 @@ public class SpaceUserServiceImpl
             Long spaceId = vo.getSpaceId();
             if (spaceId != null && spaceId > 0) {
                 Space space = spacesMap.get(spaceId).get(0);
+                // 列表中就没必要把空间对应的用户都查出来了
+                // 很耗费性能，不如让用户点详情的时候再针对性的查库
                 vo.setSpace(SpaceVo.toVo(space));
             }
         });
@@ -142,19 +151,20 @@ public class SpaceUserServiceImpl
             User loginUser) {
         ThrowUtils.throwIf(addRequest == null, ErrorCode.PARAMS_ERROR);
         ThrowUtils.throwIf(loginUser == null, ErrorCode.NOT_LOGIN_ERROR);
-        log.info("addSpaceUser: {}", addRequest);
+        log.info("添加一名团队成员: {}", addRequest);
         SpaceUser spaceUser = new SpaceUser();
         BeanUtils.copyProperties(addRequest, spaceUser);
-
         Long spaceId = spaceUser.getSpaceId();
         String roleString = spaceUser.getSpaceRole();
         if (roleString == null && spaceId != null) {
-            SpaceUser dbSpaceUser = spaceUserService.lambdaQuery()
+            SpaceUser dbSpaceUser = this.lambdaQuery()
                     .eq(SpaceUser::getSpaceId, spaceUser.getSpaceId())
                     .eq(SpaceUser::getUserId, loginUser.getId())
                     .one();
             spaceUser.setSpaceRole(dbSpaceUser.getSpaceRole());
         }
+        // TODO: 这里要根据不同的创建者等级，限制团队人数
+
         validSpaceUser(spaceUser, true);
         boolean saved = this.save(spaceUser);
         if (!saved) {
@@ -171,15 +181,14 @@ public class SpaceUserServiceImpl
         SpaceUser spaceUser = new SpaceUser();
         BeanUtils.copyProperties(editRequest, spaceUser);
         validSpaceUser(spaceUser, false);
-        Long id = editRequest.getId();
-        if (id == null || id <= 0) {
+        Long spaceUserId = editRequest.getId();
+        if (spaceUserId == null || spaceUserId <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        SpaceUser dbSpaceUser = this.getById(id);
+        SpaceUser dbSpaceUser = this.getById(spaceUserId);
         if (dbSpaceUser == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
+            throw new BusinessException(ErrorCode.NOT_FOUND, "团队成员不存在");
         }
-
         return this.updateById(spaceUser);
     }
 
@@ -196,11 +205,6 @@ public class SpaceUserServiceImpl
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
         return this.removeById(id);
-    }
-
-    @Override
-    public void fillSpaceBySpaceLevel(SpaceUser spaceUser) {
-
     }
 
     /**
@@ -248,18 +252,17 @@ public class SpaceUserServiceImpl
         if (StrUtil.isNotBlank(roleString) && spaceRole == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "未知的空间角色");
         }
-        // TODO：校验该空间是否已经添加了该成员，但需要查DB　或　缓存
+        // TODO：校验该空间是否已经添加了该成员，但需要查DB 或 缓存
     }
 
     /**
-     * 获取查询条件
+     * 根据查询请求，组装查询条件
      *
      * @param queryRequest 查询参数DTO封装
-     * @param queryWrapper 查询条件对象
+     * @return 查询条件对象
      */
-    private void getQueryWrapper(
-            SpaceUserQueryRequest queryRequest,
-            LambdaQueryWrapper<SpaceUser> queryWrapper) {
+    private LambdaQueryWrapper<SpaceUser> getQueryWrapper(SpaceUserQueryRequest queryRequest) {
+        LambdaQueryWrapper<SpaceUser> queryWrapper = new LambdaQueryWrapper<>();
         // 主键ID
         Long id = queryRequest.getId();
         if (id != null && id > 0) {
@@ -280,9 +283,8 @@ public class SpaceUserServiceImpl
         if (StrUtil.isNotBlank(role)) {
             queryWrapper.eq(SpaceUser::getSpaceRole, role);
         }
+        return queryWrapper;
     }
-
-
 }
 
 

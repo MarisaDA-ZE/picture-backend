@@ -131,10 +131,10 @@ public abstract class PictureUploadTemplate {
         result.setUrl(minioUtil.getFileUrl(defaultInfo.getFilePath()));
         // 缩略图
         result.setThumbPath(thumbInfo.getFilePath());
-        result.setUrlThumb(minioUtil.getFileUrl(thumbInfo.getFilePath()));
+        result.setThumbnailUrl(minioUtil.getFileUrl(thumbInfo.getFilePath()));
         // 原图
         result.setOriginalPath(originalInfo.getFilePath());
-        result.setUrlOriginal(minioUtil.getFileUrl(originalInfo.getFilePath()));
+        result.setOriginalUrl(minioUtil.getFileUrl(originalInfo.getFilePath()));
         return result;
     }
 

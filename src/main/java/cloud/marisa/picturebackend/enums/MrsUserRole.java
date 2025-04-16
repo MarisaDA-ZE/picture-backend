@@ -1,5 +1,6 @@
 package cloud.marisa.picturebackend.enums;
 
+import cloud.marisa.picturebackend.enums.base.MrsBaseEnum;
 import lombok.Getter;
 
 /**
@@ -9,7 +10,7 @@ import lombok.Getter;
  */
 @Getter
 // 关于接口 MrsBaseEnum<T> ，实现后可以用枚举工具类中的某些方法
-public enum UserRole implements MrsBaseEnum<String> {
+public enum MrsUserRole implements MrsBaseEnum<String> {
 
     /**
      * 被封禁的用户
@@ -50,7 +51,7 @@ public enum UserRole implements MrsBaseEnum<String> {
      */
     MASTER("master", 10);
 
-    UserRole(String value, int level) {
+    MrsUserRole(String value, int level) {
         this.level = level;
         this.value = value;
     }
@@ -71,7 +72,7 @@ public enum UserRole implements MrsBaseEnum<String> {
      * @param mustRole 需要的权限
      * @return true:大于等于，false:小于
      */
-    public boolean moreThanRole(UserRole mustRole) {
+    public boolean moreThanRole(MrsUserRole mustRole) {
         if (mustRole == null) {
             return false;
         }
@@ -83,7 +84,7 @@ public enum UserRole implements MrsBaseEnum<String> {
      * @param mustRole  需要的权限
      * @return  true:比需要权限小，false:比需要权限大
      */
-    public boolean notThanRole(UserRole mustRole) {
+    public boolean notThanRole(MrsUserRole mustRole) {
         return !moreThanRole(mustRole);
     }
 }

@@ -6,7 +6,7 @@ import cloud.marisa.picturebackend.entity.dao.SpaceUser;
 import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.enums.MrsSpaceRole;
 import cloud.marisa.picturebackend.enums.MrsSpaceType;
-import cloud.marisa.picturebackend.enums.UserRole;
+import cloud.marisa.picturebackend.enums.MrsUserRole;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.manager.auth.constant.SpaceUserPermissionConstants;
@@ -85,7 +85,7 @@ public class StpInterfaceImpl implements StpInterface {
         }
         User loginUser = (User) o;
         Long userId = loginUser.getId();
-        boolean isAdmin = userService.hasPermission(loginUser, UserRole.ADMIN);
+        boolean isAdmin = userService.hasPermission(loginUser, MrsUserRole.ADMIN);
         // 优先从空间团队表中获取结果
         SpaceUser spaceUser = authContext.getSpaceUser();
         if (spaceUser != null) {

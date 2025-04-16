@@ -1,11 +1,11 @@
 package cloud.marisa.picturebackend.service.impl;
 
+import cloud.marisa.picturebackend.enums.MrsUserRole;
 import cloud.marisa.picturebackend.manager.auth.StpKit;
 import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.entity.dto.user.*;
 import cloud.marisa.picturebackend.entity.vo.UserVo;
 import cloud.marisa.picturebackend.enums.SortEnum;
-import cloud.marisa.picturebackend.enums.UserRole;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.mapper.UserMapper;
@@ -18,8 +18,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
@@ -37,19 +38,19 @@ import static cloud.marisa.picturebackend.common.Constants.USER_LOGIN;
  * @description 针对表【user(用户表)】的数据库操作Service实现
  * @createDate 2025-03-28 15:58:26
  */
+@Log4j2
 @Service
+@RequiredArgsConstructor
 public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         implements IUserService {
 
-    @Autowired
-    private PasswordEncoder passwordEncoder;
+    private final PasswordEncoder passwordEncoder;
 
     @Override
     public long register(AccountRegisterRequest request) {
-        System.out.println(request);
+        log.info("用户注册方法的参数: {}", request);
         // 校验请求参数
         checkParamsRegister(request);
-
         // 检查是否重复
         LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(User::getUserAccount, request.getUserAccount());
@@ -63,7 +64,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         String encoded = passwordEncoder.encode(request.getUserPassword());
         user.setUserName("用户_" + RandomUtil.getRandomString(6));
         user.setUserPassword(encoded);
-        user.setUserRole(UserRole.USER.getValue());
+        user.setUserRole(MrsUserRole.USER.getValue());
         // 保存用户
         int insert = baseMapper.insert(user);
         if (insert <= 0) {
@@ -78,13 +79,16 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
         queryWrapper.eq(User::getUserAccount, loginRequest.getUserAccount());
         User dbUser = this.getOne(queryWrapper);
-        if (dbUser == null || !passwordEncoder.matches(loginRequest.getUserPassword(), dbUser.getUserPassword())) {
+        if (dbUser == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号不存在");
+        }
+        if (!passwordEncoder.matches(loginRequest.getUserPassword(), dbUser.getUserPassword())) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "账号或密码错误");
         }
         // 设置session
         // 通过setAttribute时，前端拿到的只是一个session_id，真正的数据在服务器，因此不用担心数据篡改
         servletRequest.getSession().setAttribute(USER_LOGIN, dbUser);
-
+        // 同步登录到sa-token
         StpKit.SPACE.login(dbUser.getId());
         StpKit.SPACE.getSession().set(USER_LOGIN, dbUser);
         // 返回VO对象
@@ -94,6 +98,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     @Override
     public User getLoginUser(HttpServletRequest servletRequest) {
         return SessionUtil.getLoginUser(servletRequest);
+    }
+
+    @Override
+    public User getLoginUserIfLogin(HttpServletRequest servletRequest) {
+        return SessionUtil.getUserIfLogin(servletRequest);
+    }
+
+    @Override
+    public MrsUserRole getCurrentUserRole(HttpServletRequest servletRequest) {
+        User user = SessionUtil.getUserIfLogin(servletRequest);
+        if (user == null) {
+            return MrsUserRole.GUEST;
+        }
+        String roleText = user.getUserRole();
+        MrsUserRole userRole = EnumUtil.fromValue(roleText, MrsUserRole.class);
+        if (userRole == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "未知的角色信息");
+        }
+        return userRole;
     }
 
     @Override
@@ -112,13 +135,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     public UserVo createUser(CreateUserRequest createUserRequest) {
         // 校验请求参数
         checkParamsCreate(createUserRequest);
-
         User user = new User();
         BeanUtils.copyProperties(createUserRequest, user);
         // 使用BCrypt加密
         String encoded = passwordEncoder.encode(createUserRequest.getUserPassword());
         user.setUserPassword(encoded);
-
         boolean saved = this.save(user);
         if (!saved) {
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "创建失败，数据库错误。");
@@ -130,15 +151,12 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     public UserVo updateUser(UpdateUserRequest updateUserRequest) {
         // 校验请求参数
         checkParamsUpdate(updateUserRequest);
-
         User dbUser = this.getById(updateUserRequest.getId());
         if (dbUser == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "用户不存在");
         }
-
         Long id = dbUser.getId();
         String password = dbUser.getUserPassword();
-
         // 有密码就把 明文密码 加密，没密码就用原来的
         if (StrUtil.isNotBlank(updateUserRequest.getUserPassword())) {
             password = passwordEncoder.encode(updateUserRequest.getUserPassword());
@@ -147,7 +165,6 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         BeanUtils.copyProperties(updateUserRequest, dbUser);
         dbUser.setId(id);   // id 不能被修改
         dbUser.setUserPassword(password);   // 更新密码
-
         boolean updated = this.updateById(dbUser);
         if (!updated) {
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "修改失败，数据库错误。");
@@ -206,8 +223,13 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     }
 
     @Override
-    public boolean hasPermission(User user, UserRole hasRole) {
+    public boolean hasPermission(User user, MrsUserRole hasRole) {
         return SessionUtil.hasPermission(user, hasRole);
+    }
+
+    @Override
+    public boolean hasPermission(MrsUserRole currentRole, MrsUserRole hasRole) {
+        return SessionUtil.hasPermission(currentRole, hasRole);
     }
 
     /**
@@ -220,50 +242,43 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         if (ObjectUtils.isEmpty(request)) {
             return null;
         }
-
         LambdaQueryWrapper<User> queryWrapper = new LambdaQueryWrapper<>();
         // id不为空
         if (!ObjectUtils.isEmpty(request.getId())) {
             queryWrapper.eq(User::getId, request.getId());
         }
-
         // 账号不为空（模糊匹配）
         if (StrUtil.isNotBlank(request.getUserAccount())) {
             queryWrapper.like(User::getUserAccount, request.getUserAccount());
         }
-
         // 角色不为空
         if (!ObjectUtils.isEmpty(request.getUserRole())) {
-            UserRole userRole = EnumUtil.fromValue(request.getUserRole(), UserRole.class);
+            MrsUserRole userRole = EnumUtil.fromValue(request.getUserRole(), MrsUserRole.class);
             // 角色不存在，可能是非法访问
             if (userRole == null) {
                 throw new BusinessException(ErrorCode.PARAMS_ERROR, "未知的角色");
             }
             queryWrapper.eq(User::getUserRole, userRole.getValue());
         }
-
         // 昵称不为空（模糊匹配）
         if (StrUtil.isNotBlank(request.getUserName())) {
             queryWrapper.like(User::getUserName, request.getUserName());
         }
-
         // 手机号不为空（模糊匹配）
         if (StrUtil.isNotBlank(request.getPhone())) {
             queryWrapper.like(User::getPhone, request.getPhone());
         }
-
         // 邮箱不为空（模糊匹配）
         if (StrUtil.isNotBlank(request.getEmail())) {
             queryWrapper.like(User::getEmail, request.getEmail());
         }
-
         // 需要排序时
         if (StrUtil.isNotBlank(request.getSortField())) {
             SortEnum sortType = EnumUtil.fromValue(request.getSortOrder(), SortEnum.class);
             boolean isAsc = sortType == SortEnum.ASC;
             queryWrapper.orderBy(true, isAsc, getSortField(request.getSortField()));
         }
-        System.out.println(queryWrapper.getSqlSegment());
+        log.info("最终的查询条件：{}", queryWrapper.getSqlSegment());
         return queryWrapper;
     }
 
@@ -332,8 +347,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     private void checkParamsCreate(CreateUserRequest request) {
         checkAccount(request.getUserAccount());
         checkPassword(request.getUserPassword());
-        checkRole(request.getUserRole());
-        if (StrUtil.isNotBlank(request.getUserName())) checkuserName(request.getUserName());
+        checkUserRole(request.getUserRole());
+        if (StrUtil.isNotBlank(request.getUserName())) checkUserName(request.getUserName());
         if (StrUtil.isNotBlank(request.getPhone())) checkPhone(request.getPhone());
         if (StrUtil.isNotBlank(request.getEmail())) checkEmail(request.getEmail());
     }
@@ -346,8 +361,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     private void checkParamsUpdate(UpdateUserRequest request) {
         if (StrUtil.isNotBlank(request.getUserAccount())) checkAccount(request.getUserAccount());
         if (StrUtil.isNotBlank(request.getUserPassword())) checkPassword(request.getUserPassword());
-        if (StrUtil.isNotBlank(request.getUserRole())) checkRole(request.getUserRole());
-        if (StrUtil.isNotBlank(request.getUserName())) checkuserName(request.getUserName());
+        if (StrUtil.isNotBlank(request.getUserRole())) checkUserRole(request.getUserRole());
+        if (StrUtil.isNotBlank(request.getUserName())) checkUserName(request.getUserName());
         if (StrUtil.isNotBlank(request.getPhone())) checkPhone(request.getPhone());
         if (StrUtil.isNotBlank(request.getEmail())) checkEmail(request.getEmail());
     }
@@ -391,11 +406,11 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      *
      * @param role 角色
      */
-    private void checkRole(String role) {
+    private void checkUserRole(String role) {
         if (StrUtil.isBlank(role)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "未知的角色");
         }
-        UserRole userRole = EnumUtil.fromValue(role, UserRole.class);
+        MrsUserRole userRole = EnumUtil.fromValue(role, MrsUserRole.class);
         if (userRole == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "未知的角色");
         }
@@ -407,7 +422,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      *
      * @param userName 昵称
      */
-    private void checkuserName(String userName) {
+    private void checkUserName(String userName) {
         if (StrUtil.isBlank(userName)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "昵称不能为空");
         }

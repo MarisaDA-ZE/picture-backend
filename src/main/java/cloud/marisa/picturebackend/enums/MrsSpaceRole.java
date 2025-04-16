@@ -1,5 +1,6 @@
 package cloud.marisa.picturebackend.enums;
 
+import cloud.marisa.picturebackend.enums.base.MrsBaseEnum;
 import lombok.Getter;
 
 import java.util.Arrays;

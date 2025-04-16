@@ -34,4 +34,9 @@ public class PictureUploadRequest implements Serializable {
      * 图片名称
      */
     private String picName;
+
+    /**
+     * 文件MD5
+     */
+    private String md5;
 }

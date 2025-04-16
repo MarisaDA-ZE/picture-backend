@@ -6,17 +6,17 @@ import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.entity.dto.common.DeleteRequest;
 import cloud.marisa.picturebackend.entity.dto.user.*;
 import cloud.marisa.picturebackend.entity.vo.UserVo;
-import cloud.marisa.picturebackend.enums.UserRole;
+import cloud.marisa.picturebackend.enums.MrsUserRole;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.service.IUserService;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.util.ObjectUtils;
 import org.springframework.web.bind.annotation.*;
 
 import javax.servlet.http.HttpServletRequest;
-
 
 
 /**
@@ -24,12 +24,16 @@ import javax.servlet.http.HttpServletRequest;
  * @description 用户控制层
  * @date 2025/3/28
  */
+@Log4j2
 @RestController
 @RequestMapping("/user")
+@RequiredArgsConstructor
 public class UserController {
 
-    @Autowired
-    private IUserService userService;
+    /**
+     * 用户服务
+     */
+    private final IUserService userService;
 
     /**
      * 用户注册
@@ -39,7 +43,7 @@ public class UserController {
      */
     @PostMapping("/register")
     MrsResult<?> register(@RequestBody AccountRegisterRequest registerRequest) {
-        System.out.println(registerRequest);
+        log.info("用户注册接口(/register)参数: {}", registerRequest);
         long id = userService.register(registerRequest);
         return MrsResult.ok(id);
     }
@@ -52,8 +56,10 @@ public class UserController {
      * @return 用户VO
      */
     @PostMapping("/login")
-    MrsResult<?> login(@RequestBody AccountLoginRequest loginRequest, HttpServletRequest servletRequest) {
-        System.out.println(loginRequest);
+    MrsResult<?> login(
+            @RequestBody AccountLoginRequest loginRequest,
+            HttpServletRequest servletRequest) {
+        log.info("用户登录接口(/login)参数: {}", loginRequest);
         UserVo userVo = userService.login(loginRequest, servletRequest);
         return MrsResult.ok(userVo);
     }
@@ -92,7 +98,7 @@ public class UserController {
      * @return 用户VO
      */
     @PutMapping("/add")
-    @AuthCheck(mustRole = UserRole.ADMIN)
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
     public MrsResult<?> add(@RequestBody CreateUserRequest createUserRequest) {
         UserVo userVo = userService.createUser(createUserRequest);
         return MrsResult.ok(userVo);
@@ -105,7 +111,7 @@ public class UserController {
      * @return 用户VO
      */
     @PostMapping("/update")
-    @AuthCheck(mustRole = UserRole.ADMIN)
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
     public MrsResult<?> update(@RequestBody UpdateUserRequest updateUserRequest) {
         UserVo userVo = userService.updateUser(updateUserRequest);
         return MrsResult.ok(userVo);
@@ -118,7 +124,7 @@ public class UserController {
      * @return 用户VO分页对象
      */
     @GetMapping("/get")
-    @AuthCheck(mustRole = UserRole.ADMIN)
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
     public MrsResult<?> getById(@RequestParam Long id) {
         if (ObjectUtils.isEmpty(id)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "id不能为空");
@@ -150,7 +156,7 @@ public class UserController {
      * @return 用户VO分页对象
      */
     @PostMapping("/list/page/vo")
-    @AuthCheck(mustRole = UserRole.ADMIN)
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
     public MrsResult<?> queryPage(@RequestBody QueryUserRequest queryUserRequest) {
         Page<UserVo> pages = userService.queryUserPage(queryUserRequest);
         return MrsResult.ok(pages);
@@ -163,9 +169,12 @@ public class UserController {
      * @return 是否删除成功
      */
     @PostMapping("/delete")
-    @AuthCheck(mustRole = UserRole.ADMIN)
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
     public MrsResult<?> deleteById(@RequestBody DeleteRequest deleteRequest) {
-        userService.deleteById(deleteRequest.getId());
+        boolean deleted = userService.deleteById(deleteRequest.getId());
+        if (!deleted) {
+            return MrsResult.failed("删除失败");
+        }
         return MrsResult.ok("删除成功");
     }
 
@@ -176,9 +185,12 @@ public class UserController {
      * @return 是否删除成功
      */
     @PostMapping("/delete-batch")
-    @AuthCheck(mustRole = UserRole.ADMIN)
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
     public MrsResult<?> deleteByIds(@RequestBody DeleteRequest deleteRequest) {
-        userService.batchDeleteByIds(deleteRequest.getBatchIds());
+        boolean deleted = userService.batchDeleteByIds(deleteRequest.getBatchIds());
+        if (!deleted) {
+            return MrsResult.failed("删除失败");
+        }
         return MrsResult.ok("删除成功");
     }
 }

@@ -19,7 +19,8 @@ import java.util.List;
 public interface PictureMapper extends BaseMapper<Picture> {
 
     /**
-     * 统计空间图片分类情况
+     * 统计满足条件的分类信息的数量
+     * <p>按照 分类名称-数量 的方式进行统计</p>
      *
      * @param request 参数DTO
      * @return 结果

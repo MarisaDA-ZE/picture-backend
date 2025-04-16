@@ -9,29 +9,26 @@ import cloud.marisa.picturebackend.api.image.imagesearch.ImageSearchApiFacade;
 import cloud.marisa.picturebackend.api.image.imagesearch.entity.ImageSearchResult;
 import cloud.marisa.picturebackend.common.MrsResult;
 import cloud.marisa.picturebackend.entity.dao.Picture;
-import cloud.marisa.picturebackend.entity.dao.Space;
 import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.entity.dto.common.DeleteRequest;
 import cloud.marisa.picturebackend.entity.dto.picture.*;
 import cloud.marisa.picturebackend.entity.vo.PictureVo;
+import cloud.marisa.picturebackend.enums.MrsUserRole;
 import cloud.marisa.picturebackend.enums.ReviewStatus;
-import cloud.marisa.picturebackend.enums.UserRole;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.exception.ThrowUtils;
 import cloud.marisa.picturebackend.manager.auth.StpKit;
 import cloud.marisa.picturebackend.manager.auth.constant.SpaceUserPermissionConstants;
 import cloud.marisa.picturebackend.service.IPictureService;
-import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.service.IUserService;
-import cloud.marisa.picturebackend.util.SessionUtil;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
-import org.springframework.beans.factory.annotation.Autowired;
+import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.util.DigestUtils;
@@ -46,12 +43,10 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static cloud.marisa.picturebackend.common.Constants.MAX_PAGE_SIZE;
 import static cloud.marisa.picturebackend.common.Constants.PICTURE_CACHE_PREFIX;
-
 
 /**
  * @author MarisaDAZE
@@ -59,29 +54,35 @@ import static cloud.marisa.picturebackend.common.Constants.PICTURE_CACHE_PREFIX;
  * @date 2025/3/29
  */
 @RestController
+@RequiredArgsConstructor
 @RequestMapping("/picture")
 public class PictureController {
-
-    @Autowired
-    private IUserService userService;
-
-    @Autowired
-    private IPictureService pictureService;
-
-    @Autowired
-    private ISpaceService spaceService;
-
-    @Autowired
-    private ImageOutPaintingApi imageOutPaintingApi;
-
-    @Autowired
-    private RedisTemplate<String, String> redisTemplate;
 
     @Value("${mrs.color-search.similarity}")
     private Float colorSimilarity;
 
     /**
-     * 本地Caffeine缓存
+     * 用户服务
+     */
+    private final IUserService userService;
+
+    /**
+     * 图片服务
+     */
+    private final IPictureService pictureService;
+
+    /**
+     * AI扩图服务API
+     */
+    private final ImageOutPaintingApi imageOutPaintingApi;
+
+    /**
+     * redis客户端
+     */
+    private final RedisTemplate<String, String> redisTemplate;
+
+    /**
+     * 本地缓存Caffeine
      */
     private final Cache<String, String> PICTURE_LOCAL_CACHE = Caffeine.newBuilder()
             .maximumSize(10000L)
@@ -102,8 +103,8 @@ public class PictureController {
             @RequestPart(name = "file") MultipartFile multipartFile,
             PictureUploadRequest pictureUploadRequest,
             HttpServletRequest httpServletRequest) {
-        User loginUser = SessionUtil.getLoginUser(httpServletRequest);
-        PictureVo pictureVo = pictureService.uploadPicture(multipartFile, pictureUploadRequest, loginUser);
+        User loginUser = userService.getLoginUser(httpServletRequest);
+        PictureVo pictureVo = pictureService.saveOrUpdatePicture(multipartFile, pictureUploadRequest, loginUser);
         return MrsResult.ok(pictureVo);
     }
 
@@ -120,9 +121,9 @@ public class PictureController {
     public MrsResult<?> uploadURLPicture(
             @RequestBody PictureUploadRequest pictureUploadRequest,
             HttpServletRequest httpServletRequest) {
-        User loginUser = SessionUtil.getLoginUser(httpServletRequest);
+        User loginUser = userService.getLoginUser(httpServletRequest);
         String fileURL = pictureUploadRequest.getFileUrl();
-        PictureVo pictureVo = pictureService.uploadPicture(fileURL, pictureUploadRequest, loginUser);
+        PictureVo pictureVo = pictureService.saveOrUpdatePicture(fileURL, pictureUploadRequest, loginUser);
         return MrsResult.ok(pictureVo);
     }
 
@@ -135,55 +136,17 @@ public class PictureController {
      * @return 成功上传的条数
      */
     @PostMapping("/upload/batch")
-    @AuthCheck(mustRole = UserRole.ADMIN)
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
     public MrsResult<?> uploadBatchPicture(
             @RequestBody PictureUploadBatchRequest uploadBatchRequest,
             HttpServletRequest httpServletRequest) {
         if (uploadBatchRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        User loggedUser = SessionUtil.getLoginUser(httpServletRequest);
+        User loggedUser = userService.getLoginUser(httpServletRequest);
         Integer successCount = pictureService.uploadPictureBatch(uploadBatchRequest, loggedUser);
         return MrsResult.ok(successCount);
     }
-
-    /**
-     * 测试上传文件
-     *
-     * @param multipartFile 文件对象
-     * @return 文件URL地址
-     */
-    @PostMapping("/test/upload")
-    @AuthCheck(mustRole = UserRole.ADMIN)
-    public MrsResult<?> testUpload(@RequestPart(name = "file") MultipartFile multipartFile) {
-        String url = pictureService.upload(multipartFile);
-        return MrsResult.ok(url);
-    }
-
-    /**
-     * 测试下载文件
-     *
-     * @param fileName 图片的文件名（example.jpg，不含图片在minIO中的路径）
-     * @param response HTTP响应体
-     */
-    @GetMapping("/test/download")
-    @AuthCheck(mustRole = UserRole.ADMIN)
-    public void testDownload(@RequestParam("name") String fileName, HttpServletResponse response) {
-        try (InputStream is = pictureService.downloadPicture(fileName)) {
-            response.setContentType("application/octet-stream;charset=UTF-8");
-            response.setHeader("Content-Disposition", "attachment;filename=" + fileName);
-            ServletOutputStream os = response.getOutputStream();
-            byte[] bytes = new byte[2048];
-            int read;
-            while ((read = is.read(bytes)) != -1) {
-                os.write(bytes, 0, read);
-            }
-            os.flush();
-        } catch (IOException e) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR);
-        }
-    }
-
 
     /**
      * 删除图片
@@ -206,7 +169,7 @@ public class PictureController {
      * @return .
      */
     @PostMapping("/update")
-    @AuthCheck(mustRole = UserRole.ADMIN)
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
     public MrsResult<?> updatePicture(@RequestBody PictureUpdateRequest updateRequest) {
         if (updateRequest == null || updateRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -223,7 +186,7 @@ public class PictureController {
      * @return 图片对象
      */
     @GetMapping("/get")
-    @AuthCheck(mustRole = UserRole.ADMIN)
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
     public MrsResult<?> getPictureById(@RequestParam(name = "id") Long pid) {
         if (pid == null || pid <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -243,7 +206,9 @@ public class PictureController {
      */
     @GetMapping("/get/vo")
     @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_VIEW)
-    public MrsResult<?> getPictureVoById(@RequestParam(name = "id") Long pid, HttpServletRequest httpServletRequest) {
+    public MrsResult<?> getPictureVoById(
+            @RequestParam(name = "id") Long pid,
+            HttpServletRequest httpServletRequest) {
         if (pid == null || pid <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
@@ -259,7 +224,7 @@ public class PictureController {
      * @return 图片VO
      */
     @PostMapping("/list/page")
-    @AuthCheck(mustRole = UserRole.ADMIN)
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
     public MrsResult<?> listPicturePage(@RequestBody PictureQueryRequest queryRequest) {
         if (queryRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
@@ -293,12 +258,14 @@ public class PictureController {
         } else {
             // 私有空间
             queryRequest.setNullSpaceId(false);
-//            User loggedUser = userService.getLoginUser(httpServletRequest);
-//            Space space = spaceService.getById(spaceId);
-//            ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND, "空间不存在");
-//            if (!Objects.equals(space.getUserId(), loggedUser.getId())) {
-//                throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
-//            }
+            /* 使用sa-token框架提供的权限校验替换原本根据用户的权限校验
+             * User loggedUser = userService.getLoginUser(httpServletRequest);
+             * Space space = spaceService.getById(spaceId);
+             * ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND, "空间不存在");
+             * if (!Objects.equals(space.getUserId(), loggedUser.getId())) {
+             *     throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
+             * }
+             */
             boolean canView = StpKit.SPACE.hasPermission(SpaceUserPermissionConstants.PICTURE_VIEW);
             ThrowUtils.throwIf(!canView, ErrorCode.AUTHORIZATION_ERROR);
         }
@@ -310,7 +277,6 @@ public class PictureController {
     /**
      * 分页查找图片数据
      * <p>有二级缓存</p>
-     * TODO: 缓存这块玩法还挺多，直接使用这种方案会有数据不同步的问题
      *
      * @param queryRequest 查询图片的DTO对象
      * @return 图片VO
@@ -319,6 +285,7 @@ public class PictureController {
     public MrsResult<?> listPicturePageVoCache(
             @RequestBody PictureQueryRequest queryRequest,
             HttpServletRequest httpServletRequest) {
+        // TODO: 缓存方案不能直接这样用，得改
         if (queryRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
@@ -376,22 +343,39 @@ public class PictureController {
         if (dbPicture == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "图片不存在");
         }
-        Long spaceId = dbPicture.getSpaceId();
         // 图片空间ID不为空，说明是私有图片
-        // 搜图也只能让图片所有者访问
+        Long spaceId = dbPicture.getSpaceId();
         if (spaceId != null) {
-            Long userId = dbPicture.getUserId();
-            User loginUser = userService.getLoginUser(httpServletRequest);
-            if (!loginUser.getId().equals(userId)) {
-                throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
+            /* TODO: 已改版，以图搜图可以在公开图库使用，但需登录且每天有使用次数限制
+             Long userId = dbPicture.getUserId();
+             User loginUser = userService.getLoginUser(httpServletRequest);
+             if (!loginUser.getId().equals(userId)) {
+                 throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
+             }
+            */
+            MrsUserRole currentRole = userService.getCurrentUserRole(httpServletRequest);
+            if (currentRole == MrsUserRole.BAN) {
+                throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "该账号已被封禁");
+            }
+            if (!userService.hasPermission(currentRole, MrsUserRole.USER)) {
+                throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR, "登录后可使用该功能");
             }
         }
         List<ImageSearchResult> imageSearchResults = ImageSearchApiFacade.searchImageByURL(dbPicture.getUrl());
         return MrsResult.ok(imageSearchResults);
     }
 
+    /**
+     * 根据颜色搜索相近色调的图片
+     *
+     * @param queryRequest 查询请求DTO对象
+     * @param request      httpServlet请求对象
+     * @return 搜索到的图片结果（分页）
+     */
     @PostMapping("/search/color")
-    public MrsResult<?> searchPictureByColor(@RequestBody PictureQueryRequest queryRequest, HttpServletRequest request) {
+    public MrsResult<?> searchPictureByColor(
+            @RequestBody PictureQueryRequest queryRequest,
+            HttpServletRequest request) {
         ThrowUtils.throwIf(queryRequest == null, ErrorCode.PARAMS_ERROR);
         // 颜色近似度（越小越耗费性能）
         if (colorSimilarity != null && colorSimilarity != 0) {
@@ -412,7 +396,9 @@ public class PictureController {
      */
     @PostMapping("/edit")
     @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_EDIT)
-    public MrsResult<?> editPicture(@RequestBody PictureEditRequest editRequest, HttpServletRequest servletRequest) {
+    public MrsResult<?> editPicture(
+            @RequestBody PictureEditRequest editRequest,
+            HttpServletRequest servletRequest) {
         if (editRequest == null || editRequest.getId() <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
@@ -430,7 +416,9 @@ public class PictureController {
      */
     @PostMapping("/edit/batch")
     @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_EDIT)
-    public MrsResult<?> editBatchPicture(@RequestBody PictureEditBatchRequest editRequest, HttpServletRequest servletRequest) {
+    public MrsResult<?> editBatchPicture(
+            @RequestBody PictureEditBatchRequest editRequest,
+            HttpServletRequest servletRequest) {
         User loginUser = userService.getLoginUser(servletRequest);
         boolean updated = pictureService.editPictureBatch(editRequest, loginUser);
         if (updated) {
@@ -446,9 +434,8 @@ public class PictureController {
      * @param servletRequest HttpServlet请求对象
      * @return .
      */
-    // @AuthCheck(mustRole = UserRole.USER)
-    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_EDIT)
     @PostMapping("/out_painting/create_task")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_EDIT)
     public MrsResult<?> createOutPaintingTask(
             @RequestBody PictureOutPaintingTaskRequest taskRequest,
             HttpServletRequest servletRequest) {
@@ -457,18 +444,18 @@ public class PictureController {
         }
         User loginUser = userService.getLoginUser(servletRequest);
         CreateTaskResponse createTaskResponse = pictureService.createOutPaintingTask(taskRequest, loginUser);
+        // TODO: 对不同用户应该有次数限制
         return MrsResult.ok(createTaskResponse);
     }
 
     /**
-     * AI扩图服务
+     * AI扩图服务的异步任务查询
      *
      * @param taskId AI扩图的任务ID
      * @return .
      */
-    // @AuthCheck(mustRole = UserRole.USER)
-    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_EDIT)
     @GetMapping("/out_painting/get_task")
+    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_EDIT)
     public MrsResult<?> queryOutPaintingTask(
             @RequestParam(name = "taskId") String taskId) {
         if (StrUtil.isBlank(taskId)) {
@@ -487,8 +474,10 @@ public class PictureController {
      * @return .
      */
     @PostMapping("/review")
-    @AuthCheck(mustRole = UserRole.ADMIN)
-    public MrsResult<?> reviewPicture(@RequestBody PictureReviewRequest reviewRequest, HttpServletRequest servletRequest) {
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
+    public MrsResult<?> reviewPicture(
+            @RequestBody PictureReviewRequest reviewRequest,
+            HttpServletRequest servletRequest) {
         if (reviewRequest == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
@@ -511,4 +500,40 @@ public class PictureController {
         return MrsResult.ok(tagCategory);
     }
 
+    /**
+     * 测试上传文件
+     *
+     * @param multipartFile 文件对象
+     * @return 文件URL地址
+     */
+    @PostMapping("/test/upload")
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
+    public MrsResult<?> testUpload(@RequestPart(name = "file") MultipartFile multipartFile) {
+        String url = pictureService.upload(multipartFile);
+        return MrsResult.ok(url);
+    }
+
+    /**
+     * 测试下载文件
+     *
+     * @param fileName 图片的文件名（example.jpg，不含图片在minIO中的路径）
+     * @param response HTTP响应体
+     */
+    @GetMapping("/test/download")
+    @AuthCheck(mustRole = MrsUserRole.ADMIN)
+    public void testDownload(@RequestParam("name") String fileName, HttpServletResponse response) {
+        try (InputStream is = pictureService.downloadPicture(fileName)) {
+            response.setContentType("application/octet-stream;charset=UTF-8");
+            response.setHeader("Content-Disposition", "attachment;filename=" + fileName);
+            ServletOutputStream os = response.getOutputStream();
+            byte[] bytes = new byte[2048];
+            int read;
+            while ((read = is.read(bytes)) != -1) {
+                os.write(bytes, 0, read);
+            }
+            os.flush();
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.OPERATION_ERROR);
+        }
+    }
 }

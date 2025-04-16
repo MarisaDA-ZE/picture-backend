@@ -3,7 +3,7 @@ package cloud.marisa.picturebackend.service;
 import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.entity.dto.user.*;
 import cloud.marisa.picturebackend.entity.vo.UserVo;
-import cloud.marisa.picturebackend.enums.UserRole;
+import cloud.marisa.picturebackend.enums.MrsUserRole;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 
@@ -36,11 +36,30 @@ public interface IUserService extends IService<User> {
 
     /**
      * 获取当前登录用户信息(从session中)
+     * <p>返回登录用户对象 或 报错</p>
      *
      * @param servletRequest http请求对象
-     * @return 用户VO
+     * @return 当前用户
      */
     User getLoginUser(HttpServletRequest servletRequest);
+
+    /**
+     * 获取当前登录用户信息(从session中)
+     * <p>如果没登录就会返回空</p>
+     *
+     * @param servletRequest http请求对象
+     * @return 登录用户 或 null
+     */
+    User getLoginUserIfLogin(HttpServletRequest servletRequest);
+
+    /**
+     * 从httpServletRequest中获取当前用户的角色
+     * <p>如果未登录，就拿到的是Guest角色</p>
+     *
+     * @param servletRequest http请求对象
+     * @return 用户角色
+     */
+    MrsUserRole getCurrentUserRole(HttpServletRequest servletRequest);
 
     /**
      * 通过session退出登录
@@ -111,5 +130,15 @@ public interface IUserService extends IService<User> {
      * @param hasRole 需要具有的权限
      * @return .
      */
-    boolean hasPermission(User user, UserRole hasRole);
+    boolean hasPermission(User user, MrsUserRole hasRole);
+
+    /**
+     * 检查当前角色是否具有权限
+     * <p>当前角色的权限大于等于hasRole的权限则返回true，反之则为false</p>
+     *
+     * @param currentRole 当前有的权限
+     * @param hasRole     需要具有的权限
+     * @return .
+     */
+    boolean hasPermission(MrsUserRole currentRole, MrsUserRole hasRole);
 }

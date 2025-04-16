@@ -1,6 +1,6 @@
 package cloud.marisa.picturebackend.util;
 
-import cloud.marisa.picturebackend.enums.MrsBaseEnum;
+import cloud.marisa.picturebackend.enums.base.MrsBaseEnum;
 import org.springframework.util.ObjectUtils;
 
 /**

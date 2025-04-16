@@ -62,6 +62,7 @@
         is_delete
     </sql>
 
+    <!-- 根据条件，统计满足条件的每种分类各有多少 -->
     <select id="getSpaceCategoryAnalyze" resultMap="SpaceCategoryAnalyzeResponse">
         SELECT category AS category,
         COUNT(*) AS totalCount,

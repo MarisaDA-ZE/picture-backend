@@ -192,6 +192,11 @@
             <version>5.2.0</version>
         </dependency>
 
+        <!-- websocket -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-websocket</artifactId>
+        </dependency>
 
         <!-- MinIO分布式存储引擎 -->
         <!-- https://mvnrepository.com/artifact/io.minio/minio -->
