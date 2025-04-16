@@ -2,10 +2,10 @@ package cloud.marisa.picturebackend.util;
 
 /**
  * @author MarisaDAZE
- * @description RandomUtil.类
+ * @description MrsRandomUtil.类
  * @date 2025/3/28
  */
-public class RandomUtil {
+public class MrsRandomUtil {
 
     /**
      * 获取一个[x,y]区间的随机数

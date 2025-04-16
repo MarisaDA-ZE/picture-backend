@@ -11,9 +11,12 @@ import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.mapper.UserMapper;
 import cloud.marisa.picturebackend.service.IUserService;
 import cloud.marisa.picturebackend.util.EnumUtil;
-import cloud.marisa.picturebackend.util.RandomUtil;
+import cloud.marisa.picturebackend.util.MrsRandomUtil;
 import cloud.marisa.picturebackend.util.SessionUtil;
+import cloud.marisa.picturebackend.util.cache.MrsCacheUtil;
+import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -32,9 +35,12 @@ import org.springframework.util.ObjectUtils;
 import javax.servlet.http.HttpServletRequest;
 import java.lang.Object;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
+import static cloud.marisa.picturebackend.common.Constants.USER_CACHE_PREFIX;
 import static cloud.marisa.picturebackend.common.Constants.USER_LOGIN;
 
 /**
@@ -53,6 +59,25 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
      */
     private final PasswordEncoder passwordEncoder;
 
+    /**
+     * Redis缓存模板工具
+     */
+    private final RedisTemplate<String, Object> redisTemplate;
+
+    /**
+     * 以用户ID为键时的缓存前缀
+     */
+    private static final String ID_PREFIX = "user-id:";
+
+    /**
+     * 用户信息的本地缓存Caffeine
+     */
+    private final Cache<String, String> USER_LOCAL_CACHE = Caffeine.newBuilder()
+            .maximumSize(10000L)
+            // 5分钟后过期（5*60=300）
+            .expireAfterWrite(300, TimeUnit.SECONDS)
+            .build();
+
     @Override
     public long register(AccountRegisterRequest request) {
         log.info("用户注册方法的参数: {}", request);
@@ -69,7 +94,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         User user = new User();
         user.setUserAccount(request.getUserAccount());
         String encoded = passwordEncoder.encode(request.getUserPassword());
-        user.setUserName("用户_" + RandomUtil.getRandomString(6));
+        user.setUserName("用户_" + MrsRandomUtil.getRandomString(6));
         user.setUserPassword(encoded);
         user.setUserRole(MrsUserRole.USER.getValue());
         // 保存用户
@@ -172,7 +197,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         BeanUtils.copyProperties(updateUserRequest, dbUser);
         dbUser.setId(id);   // id 不能被修改
         dbUser.setUserPassword(password);   // 更新密码
+        // 删除缓存
+        String cacheKey = USER_CACHE_PREFIX + ID_PREFIX + id;
+        List<String> cacheKeys = Collections.singletonList(cacheKey);
+        MrsCacheUtil.removeCache(USER_LOCAL_CACHE, redisTemplate, cacheKeys);
+        // 更新库中的数据
         boolean updated = this.updateById(dbUser);
+        // 通过线程池异步延迟删除缓存
+        MrsCacheUtil.delayRemoveCache(USER_LOCAL_CACHE, redisTemplate, cacheKeys, 3);
         if (!updated) {
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "修改失败，数据库错误。");
         }
@@ -198,11 +230,31 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         if (id == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "id不能为空");
         }
-        User dbUser = this.getById(id);
-        if (ObjectUtils.isEmpty(dbUser)) {
-            throw new BusinessException(ErrorCode.NOT_FOUND, "用户不存在");
+        // 多级缓存技术
+        String cacheKey = USER_CACHE_PREFIX + ID_PREFIX + id;
+        log.info("缓存的key: {}", cacheKey);
+        String userJSON = USER_LOCAL_CACHE.getIfPresent(cacheKey);
+        User user = JSONUtil.toBean(userJSON, User.class);
+        // 本地缓存中没有，尝试从redis缓存中取
+        if (user == null) {
+            Object cacheRedis = redisTemplate.opsForValue().get(cacheKey);
+            // redis缓存命中
+            if (cacheRedis != null) {
+                user = (User) cacheRedis;
+            } else {
+                // 两层缓存中都没有，去数据库中查
+                user = this.getById(id);
+                // 用户真的不存在
+                if (user == null) {
+                    throw new BusinessException(ErrorCode.NOT_FOUND, "用户不存在");
+                }
+            }
         }
-        return UserVo.toVO(dbUser);
+        USER_LOCAL_CACHE.put(cacheKey, JSONUtil.toJsonStr(user));
+        // 设置随机过期时间（5分钟），防止雪崩
+        int offset = RandomUtil.randomInt(0, 300);
+        redisTemplate.opsForValue().set(cacheKey, user, 300 + offset, TimeUnit.SECONDS);
+        return UserVo.toVO(user);
     }
 
     @Override
@@ -210,7 +262,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         if (id == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "id不能为空");
         }
+        // 删除缓存
+        String cacheKey = USER_CACHE_PREFIX + ID_PREFIX + id;
+        List<String> cacheKeys = Collections.singletonList(cacheKey);
+        MrsCacheUtil.removeCache(USER_LOCAL_CACHE, redisTemplate, cacheKeys);
+        // 删库中的数据
         boolean removed = this.removeById(id);
+        // 通过线程池异步延迟删除缓存
+        MrsCacheUtil.delayRemoveCache(USER_LOCAL_CACHE, redisTemplate, cacheKeys, 3);
         if (!removed) {
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "删除失败，数据库错误。");
         }
@@ -222,7 +281,14 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         if (CollectionUtils.isEmpty(ids)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "id不能为空");
         }
+        // 删除缓存
+        List<String> cacheKeys = ids.stream()
+                .map(id -> USER_CACHE_PREFIX + ID_PREFIX + id)
+                .collect(Collectors.toList());
+        MrsCacheUtil.removeCache(USER_LOCAL_CACHE, redisTemplate, cacheKeys);
         boolean removed = this.removeByIds(ids);
+        // 通过线程池异步延迟删除缓存
+        MrsCacheUtil.delayRemoveCache(USER_LOCAL_CACHE, redisTemplate, cacheKeys, 4);
         if (!removed) {
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "删除失败，数据库错误。");
         }

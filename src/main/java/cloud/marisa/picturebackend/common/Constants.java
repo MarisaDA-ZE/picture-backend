@@ -28,4 +28,9 @@ public class Constants {
      */
     public static final String PICTURE_CACHE_PREFIX = "mrs_picture:picture_vo_page_cache";
 
+    /**
+     * 用户服务的缓存前缀
+     */
+    public static final String USER_CACHE_PREFIX = "user:";
+
 }
