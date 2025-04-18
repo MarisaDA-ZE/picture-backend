@@ -86,6 +86,14 @@ public interface IPictureService extends IService<Picture> {
     Long updatePicture(PictureUpdateRequest updateRequest);
 
     /**
+     * 根据ID获取一张图片信息
+     *
+     * @param pid 图片ID
+     * @return 图片对象
+     */
+    Picture getPictureByIdCache(Long pid);
+
+    /**
      * 下载一张图片
      * <p>这个方法只能用于下载"pictures"目录下的图片</p>
      *
@@ -172,4 +180,16 @@ public interface IPictureService extends IService<Picture> {
      * @deprecated 已废弃
      */
     void checkPictureAuth(Picture picture, User loginUser);
+
+    /**
+     * 立即删除缓存
+     * @param ids  ID列表
+     */
+    void removeCacheByKeys(List<Long> ids);
+
+    /**
+     * 延迟删除缓存
+     * @param ids  ID列表
+     */
+    void delayRemoveCacheByKeys(List<Long> ids);
 }

@@ -20,16 +20,19 @@ import cloud.marisa.picturebackend.manager.auth.SpaceUserAuthManager;
 import cloud.marisa.picturebackend.manager.auth.StpKit;
 import cloud.marisa.picturebackend.manager.auth.constant.SpaceUserPermissionConstants;
 import cloud.marisa.picturebackend.mapper.PictureMapper;
+import cloud.marisa.picturebackend.queue.PersistentFallbackQueue;
 import cloud.marisa.picturebackend.service.IPictureService;
 import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.service.IUserService;
 import cloud.marisa.picturebackend.upload.picture.PictureMultipartFileUpload;
 import cloud.marisa.picturebackend.upload.picture.PictureUrlUpload;
 import cloud.marisa.picturebackend.util.*;
+import cloud.marisa.picturebackend.util.cache.MrsCacheUtil;
 import cloud.marisa.picturebackend.util.colors.ColorUtils;
 import cloud.marisa.picturebackend.util.colors.MrsColorHSV;
 import cn.hutool.core.collection.CollectionUtil;
 import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
 import cn.hutool.crypto.digest.MD5;
 import cn.hutool.json.JSONUtil;
@@ -38,10 +41,13 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
@@ -53,8 +59,11 @@ import java.io.InputStream;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
+
+import static cloud.marisa.picturebackend.common.Constants.PICTURE_CACHE_NAME;
 
 
 /**
@@ -114,7 +123,7 @@ public class PictureServiceImpl
     /**
      * 动态线程池
      */
-    private final ThreadPoolExecutor threadPoolExecutor;
+    private final ThreadPoolExecutor editBatchPoolExecutor;
 
     /**
      * AI扩图API
@@ -125,6 +134,31 @@ public class PictureServiceImpl
      * 团队空间权限管理器
      */
     private final SpaceUserAuthManager spaceUserAuthManager;
+
+    /**
+     * Redis缓存模板工具
+     */
+    public final RedisTemplate<String, Object> redisTemplate;
+
+    /**
+     * 简易任务队列
+     * <p>如果任务满了，会持久化到Redis</p>
+     */
+    private final PersistentFallbackQueue reviewQueue;
+
+    /**
+     * 以图片ID为键时的缓存前缀
+     */
+    public static final String PICTURE_ID = "picture-id:";
+
+    /**
+     * 图片信息的本地缓存Caffeine
+     */
+    public final Cache<String, String> PICTURE_LOCAL_CACHE = Caffeine.newBuilder()
+            .maximumSize(10000L)
+            // 5分钟后过期（5*60=300）
+            .expireAfterWrite(300, TimeUnit.SECONDS)
+            .build();
 
     @Override
     public String upload(MultipartFile multipartFile) {
@@ -150,6 +184,7 @@ public class PictureServiceImpl
         Long spaceId = uploadRequest.getSpaceId();
         // 前端还是传的null，这里改了就不用改前端了
         if (spaceId == null) spaceId = 0L;
+        log.info("当前空间ID： {}", spaceId);
         if (spaceId < 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "非法的空间ID");
         }
@@ -158,7 +193,7 @@ public class PictureServiceImpl
         String suffixPath = "common/";
         // 上传到 私人空间 或 团队空间
         if (spaceId != 0L) {
-            space.set(spaceService.getById(spaceId));
+            space.set(spaceService.getSpaceByIdCache(spaceId));
             ThrowUtils.throwIf(space.get() == null, ErrorCode.NOT_FOUND, "空间不存在");
             // 有空间ID，上传到对应的空间
             suffixPath = spaceId + "/";
@@ -230,7 +265,7 @@ public class PictureServiceImpl
                 // 拷贝操作或许应异步进行，先给用户一个可访问的图片链接
                 // 但用户马上要编辑该怎么办？
                 picture = getPicture(loginUser, repeatPicture);
-                log.info("秒传啦");
+                log.info("触发秒传");
                 log.info("上传耗时: {}", (System.currentTimeMillis() - current));
             }
         } else {
@@ -241,9 +276,11 @@ public class PictureServiceImpl
             log.info("原始上传数据 {}", uploadResult);
             picture = getPicture(loginUser, uploadResult);
         }
+        // 公共空间 id=0L, 私人空间 id=<雪花ID>
+        picture.setSpaceId(spaceId);
         // 上传到私有空间，需要限制大小和数量
         if (spaceId != 0L) {
-            picture.setSpaceId(spaceId);
+            // picture.setSpaceId(spaceId);
             Space _space = space.get();
             // 这里只是校验，更新空间数据在最下面
             Long totalSize = _space.getTotalSize();
@@ -272,7 +309,20 @@ public class PictureServiceImpl
         log.info("最终图片信息 {}", picture);
         // 开启事务，保证图片和空间数据都保存成功
         transactionTemplate.execute(status -> {
+            Long picId = picture.getId();
+            List<String> cacheKeys = new ArrayList<>();
+            // 删除缓存
+            if (picId != null) {
+                String cacheKey = PICTURE_CACHE_NAME + PICTURE_ID + picId;
+                cacheKeys = Collections.singletonList(cacheKey);
+                MrsCacheUtil.removeCache(PICTURE_LOCAL_CACHE, redisTemplate, cacheKeys);
+            }
+            // 更新图片
             boolean pictureSaved = this.saveOrUpdate(picture);
+            // 通过线程池异步延迟删除缓存
+            if (picId != null) {
+                MrsCacheUtil.delayRemoveCache(PICTURE_LOCAL_CACHE, redisTemplate, cacheKeys, 3);
+            }
             if (!pictureSaved) {
                 throw new BusinessException(ErrorCode.OPERATION_ERROR, "保存图片失败");
             }
@@ -287,11 +337,15 @@ public class PictureServiceImpl
                 updateWrapper.set(Space::getTotalSize, totalSize);
                 updateWrapper.set(Space::getTotalCount, totalCount);
                 updateWrapper.set(Space::getEditTime, new Date());
-                boolean spaceUpdated = spaceService.update(updateWrapper);
+                boolean spaceUpdated = spaceService.updateSpaceByCache(updateWrapper, _space.getId());
                 if (!spaceUpdated) {
                     throw new BusinessException(ErrorCode.OPERATION_ERROR, "更新空间失败");
                 }
             }
+            // 啥都完成了，如果不是管理员上传图片，就将内容推给AI审核
+            // 这里推到本地队列，在AI审核服务那里进行消费
+            // 队列满了，数据会持久化到Redis
+            reviewQueue.add(picture);
             return null;
         });
         return PictureVo.toVO(picture);
@@ -423,24 +477,28 @@ public class PictureServiceImpl
         // 填充审核信息
         this.fillReviewParams(picture, loggedUser);
         // 检查图片是否存在
-        Picture dbPicture = this.getById(editRequest.getId());
+        Picture dbPicture = this.getPictureByIdCache(editRequest.getId());
         if (dbPicture == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "图片不存在");
         }
-        // 图片ID不可更改
-        picture.setId(editRequest.getId());
         // 图片空间信息
         Long spaceId = editRequest.getSpaceId();
         if (spaceId == null) spaceId = 0L;  // 让前端不用处理空间ID了，之前公共空间以spaceId==null进行判断的
         ThrowUtils.throwIf(spaceId < 0, ErrorCode.PARAMS_ERROR, "空间ID错误");
         if (spaceId != 0L) {
             // 有空间ID，检查空间是否存在
-            boolean exists = spaceService.lambdaQuery()
-                    .eq(Space::getId, spaceId).exists();
-            ThrowUtils.throwIf(!exists, ErrorCode.NOT_FOUND, "空间不存在");
+            Space space = spaceService.getSpaceByIdCache(spaceId);
+            ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND, "空间不存在");
         }
         picture.setSpaceId(spaceId);
+        // 删除缓存
+        String cacheKey = PICTURE_CACHE_NAME + PICTURE_ID + picture.getId();
+        List<String> cacheKeys = Collections.singletonList(cacheKey);
+        MrsCacheUtil.removeCache(PICTURE_LOCAL_CACHE, redisTemplate, cacheKeys);
+        // 更新图片
         boolean updated = this.updateById(picture);
+        // 通过线程池异步延迟删除缓存
+        MrsCacheUtil.delayRemoveCache(PICTURE_LOCAL_CACHE, redisTemplate, cacheKeys, 3);
         if (!updated) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR);
         }
@@ -459,6 +517,7 @@ public class PictureServiceImpl
         if (dbPictures == null || dbPictures.isEmpty()) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "图片不存在");
         }
+
         /* 修改图片需要本人或者管理员（已废弃）
          * 团队空间的其它具有权限成员可以修改图片
          * 但这里已经用 sa-token 在 controller层 进行过校验了
@@ -488,6 +547,7 @@ public class PictureServiceImpl
         for (int i = 0; i < dbPictures.size(); i += batchSize) {
             List<Picture> pictures = dbPictures.subList(i, Math.min(i + batchSize, dbPictures.size()));
             CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+
                 pictures.forEach(picture -> {
                     // 更新分类信息
                     String category = editRequest.getCategory();
@@ -500,11 +560,20 @@ public class PictureServiceImpl
                         picture.setTags(JSONUtil.toJsonStr(tags));
                     }
                 });
+                // 删除缓存
+                List<String> cacheKeys = pictures.stream()
+                        .map(Picture::getId)
+                        .map(pid -> PICTURE_CACHE_NAME + PICTURE_ID + pid)
+                        .collect(Collectors.toList());
+                MrsCacheUtil.removeCache(PICTURE_LOCAL_CACHE, redisTemplate, cacheKeys);
+                // 更新图片
                 boolean updated = this.updateBatchById(pictures);
+                // 通过线程池异步延迟删除缓存
+                MrsCacheUtil.delayRemoveCache(PICTURE_LOCAL_CACHE, redisTemplate, cacheKeys, 3);
                 if (!updated) {
                     throw new BusinessException(ErrorCode.OPERATION_ERROR);
                 }
-            }, threadPoolExecutor);
+            }, editBatchPoolExecutor);
             futures.add(future);
         }
         // 等待所有任务完成
@@ -534,6 +603,7 @@ public class PictureServiceImpl
 
     @Override
     public Long updatePicture(PictureUpdateRequest updateRequest) {
+        // TODO: 缓存暂时先加到这里，剩下的明天再加
         // 图片空间ID
         Long newSpaceId = updateRequest.getSpaceId();
         if (newSpaceId == null) newSpaceId = 0L;
@@ -561,6 +631,40 @@ public class PictureServiceImpl
             throw new BusinessException(ErrorCode.OPERATION_ERROR);
         }
         return picture.getId();
+    }
+
+    @Override
+    public Picture getPictureByIdCache(Long pid) {
+        // 多级缓存
+        String cacheKey = PICTURE_CACHE_NAME + PICTURE_ID + pid;
+        log.info("缓存的key: {}", cacheKey);
+        String cacheJson = PICTURE_LOCAL_CACHE.getIfPresent(cacheKey);
+        log.info("cacheJson: {}", cacheJson);
+        Picture picture = JSONUtil.toBean(cacheJson, Picture.class);
+        log.info("picture: {}", picture);
+        // 本地缓存中没有，尝试从redis缓存中取
+        if (cacheJson == null) {
+            Object cacheRedis = redisTemplate.opsForValue().get(cacheKey);
+            log.info("cacheRedis: {}", cacheRedis);
+            log.info("cacheRedis: {}", cacheRedis instanceof Picture);
+            // redis缓存命中
+            if (cacheRedis != null) {
+                String jsonStr = JSONUtil.toJsonStr(cacheRedis);
+                picture = JSONUtil.toBean(jsonStr, Picture.class);
+            } else {
+                // 两层缓存中都没有，去数据库中查
+                picture = this.getById(pid);
+                // 图片真的不存在
+                if (picture == null) {
+                    throw new BusinessException(ErrorCode.NOT_FOUND, "图片不存在");
+                }
+            }
+        }
+        PICTURE_LOCAL_CACHE.put(cacheKey, JSONUtil.toJsonStr(picture));
+        // 设置随机过期时间（5分钟），防止雪崩
+        int offset = RandomUtil.randomInt(0, 300);
+        redisTemplate.opsForValue().set(cacheKey, picture, 300 + offset, TimeUnit.SECONDS);
+        return picture;
     }
 
     /**
@@ -636,12 +740,13 @@ public class PictureServiceImpl
         if (picId == null || picId <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        Picture picture = this.getById(picId);
+        // getPictureByIdCache 中有做判空操作，picture肯定能拿到
+        Picture picture = this.getPictureByIdCache(picId);
         Long spaceId = picture.getSpaceId();
         if (spaceId == null) spaceId = 0L;
         AtomicReference<Space> atomicSpace = new AtomicReference<>(null);
         if (!spaceId.equals(0L)) {
-            atomicSpace.set(spaceService.getById(spaceId));
+            atomicSpace.set(spaceService.getSpaceByIdCache(spaceId));
         }
         /*
          * 校验操作权限（已废弃），统一使用sa-token 的图片权限校验系统
@@ -649,8 +754,14 @@ public class PictureServiceImpl
          * checkPictureAuth(picture, loggedUser);
          * */
         transactionTemplate.execute(status -> {
+            // 删除缓存
+            String cacheKey = PICTURE_CACHE_NAME + PICTURE_ID + picId;
+            List<String> cacheKeys = Collections.singletonList(cacheKey);
+            MrsCacheUtil.removeCache(PICTURE_LOCAL_CACHE, redisTemplate, cacheKeys);
             // 删除图片
             boolean picRemoved = this.removeById(picId);
+            // 通过线程池异步延迟删除缓存
+            MrsCacheUtil.delayRemoveCache(PICTURE_LOCAL_CACHE, redisTemplate, cacheKeys, 3);
             if (!picRemoved) {
                 throw new BusinessException(ErrorCode.OPERATION_ERROR, "数据库错误，图片删除失败");
             }
@@ -699,8 +810,10 @@ public class PictureServiceImpl
         if (spaceId != null) {
             queryWrapper.eq(Picture::getSpaceId, spaceId);
         }
-        queryWrapper.isNull(queryRequest.isNullSpaceId(), Picture::getSpaceId);
-
+        // 空间id为空，说明要查公共空间，但公共空间约定ID=0
+        if (queryRequest.isNullSpaceId()) {
+            queryWrapper.eq(Picture::getSpaceId, 0L);
+        }
         // 图片描述，模糊匹配
         if (StrUtil.isNotBlank(queryRequest.getIntroduction())) {
             queryWrapper.like(Picture::getIntroduction, queryRequest.getIntroduction());
@@ -866,31 +979,41 @@ public class PictureServiceImpl
         if (pid == null || pid <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "图片ID不能为空");
         }
-        Picture picture = this.getById(pid);
+        // 根据图片ID获取图片对象
+        Picture picture = this.getPictureByIdCache(pid);
         if (picture == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "图片不存在");
         }
-        User loggedUser = userService.getLoginUser(servletRequest);
         Space space = null;
         Long spaceId = picture.getSpaceId();
         if (spaceId == null) spaceId = 0L;
+        User loggedUser = userService.getLoginUserIfLogin(servletRequest);
         log.info("spaceId: {}", spaceId);
         // 是私人空间或团队空间，校验是否有相应权限
         if (!spaceId.equals(0L)) {
             // this.checkPictureAuth(picture, loggedUser);
+            // 如果用户未登录，但又想访问私人图库，提示用户登录
+            // 2期时这里能否访问应该看图库所属用户是否打算公开这个图库
+            if (loggedUser == null) {
+                throw new BusinessException(ErrorCode.NOT_LOGIN_ERROR);
+            }
             boolean canView = StpKit.SPACE.hasPermission(SpaceUserPermissionConstants.PICTURE_VIEW);
             ThrowUtils.throwIf(!canView, ErrorCode.AUTHORIZATION_ERROR);
-            space = spaceService.getById(spaceId);
+            space = spaceService.getSpaceByIdCache(spaceId);
             ThrowUtils.throwIf(space == null, ErrorCode.NOT_FOUND);
         }
         // 拷贝图片数据并转换为VO
         PictureVo vo = PictureVo.toVO(picture);
         Long userId = picture.getUserId();
         if (vo != null && userId != null) {
-            User user = userService.getById(userId);
-            List<String> permissions = spaceUserAuthManager.getPermissionList(space, loggedUser);
+            UserVo userVo = userService.getUserVoByIdCache(userId);
+            // 如果是未登录用户，则只有基础查看权限
+            List<String> permissions = Collections.singletonList(SpaceUserPermissionConstants.PICTURE_VIEW);
+            if (loggedUser != null) {
+                permissions = spaceUserAuthManager.getPermissionList(space, loggedUser);
+            }
             vo.setPermissionList(permissions);
-            vo.setUserVo(UserVo.toVO(user));
+            vo.setUserVo(userVo);
         }
         log.info("pictureVo: {}", vo);
         return vo;
@@ -908,7 +1031,9 @@ public class PictureServiceImpl
     public Page<PictureVo> getPictureVoPage(Page<Picture> picturePage, HttpServletRequest servletRequest) {
         Page<PictureVo> result = new Page<>(picturePage.getCurrent(), picturePage.getSize(), picturePage.getTotal());
         List<Picture> records = picturePage.getRecords();
-        Set<Long> userIds = records.stream().map(Picture::getUserId).collect(Collectors.toSet());
+        Set<Long> userIds = records.stream()
+                .map(Picture::getUserId)
+                .collect(Collectors.toSet());
         if (userIds.isEmpty()) {
             result.setRecords(new ArrayList<>());
             return result;
@@ -918,24 +1043,26 @@ public class PictureServiceImpl
                 .map(UserVo::toVO)
                 .collect(Collectors.groupingBy(userVo -> (userVo != null) ? userVo.getId() : -1));
         // 组装图片Vo列表
-        List<PictureVo> pictureVos = records.stream().map(picture -> {
-            PictureVo vo = PictureVo.toVO(picture);
-            if (vo != null) {
-                // 不能在查列表的时候就拿到所有格式的图片信息
-                // 那样容易被爬，所以这里只返回缩略图的URL
-                vo.setUrl(null);
-                vo.setOriginalUrl(null);
-                if (userVos.containsKey(picture.getUserId())) {
-                    vo.setUserVo(userVos.get(picture.getUserId()).get(0));
-                } else {
-                    vo.setUserVo(null);
-                }
-                // 公共图库权限列表
-                List<String> permissions = spaceUserAuthManager.getPermissionsByRole(MrsSpaceRole.VIEWER.getValue());
-                vo.setPermissionList(permissions);
-            }
-            return vo;
-        }).collect(Collectors.toList());
+        List<PictureVo> pictureVos = records.stream()
+                .map(picture -> {
+                    PictureVo vo = PictureVo.toVO(picture);
+                    if (vo != null) {
+                        // 不能在查列表的时候就拿到所有格式的图片信息
+                        // 那样容易被爬，所以这里只返回缩略图的URL
+                        vo.setUrl(null);
+                        vo.setOriginalUrl(null);
+                        if (userVos.containsKey(picture.getUserId())) {
+                            vo.setUserVo(userVos.get(picture.getUserId()).get(0));
+                        } else {
+                            vo.setUserVo(null);
+                        }
+                        // 公共图库权限列表
+                        List<String> permissions = spaceUserAuthManager.getPermissionsByRole(MrsSpaceRole.VIEWER.getValue());
+                        vo.setPermissionList(permissions);
+                    }
+                    return vo;
+                })
+                .collect(Collectors.toList());
         result.setRecords(pictureVos);
         return result;
     }
@@ -979,7 +1106,7 @@ public class PictureServiceImpl
         if (reviewStatus == null || reviewStatus == ReviewStatus.PENDING) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        Picture picture = this.getById(reviewRequest.getId());
+        Picture picture = this.getPictureByIdCache(reviewRequest.getId());
         if (picture == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND);
         }
@@ -1052,6 +1179,25 @@ public class PictureServiceImpl
                 throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR);
             }
         }
+    }
+
+    @Override
+    public void removeCacheByKeys(List<Long> ids) {
+        List<String> keys = ids.stream()
+                .map(id -> PICTURE_CACHE_NAME + PICTURE_ID + id)
+                .collect(Collectors.toList());
+        // 立即删除缓存
+        MrsCacheUtil.removeCache(PICTURE_LOCAL_CACHE, redisTemplate, keys);
+    }
+
+    @Override
+    public void delayRemoveCacheByKeys(List<Long> ids) {
+        List<String> keys = ids.stream()
+                .map(id -> PICTURE_CACHE_NAME + PICTURE_ID + id)
+                .collect(Collectors.toList());
+        // 通过线程池异步延迟删除缓存
+        MrsCacheUtil.delayRemoveCache(PICTURE_LOCAL_CACHE, redisTemplate, keys, 3);
+
     }
 
 

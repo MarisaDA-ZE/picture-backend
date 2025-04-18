@@ -191,10 +191,7 @@ public class PictureController {
         if (pid == null || pid <= 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        Picture picture = pictureService.getById(pid);
-        if (picture == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND);
-        }
+        Picture picture = pictureService.getPictureByIdCache(pid);
         return MrsResult.ok(picture);
     }
 
@@ -205,7 +202,6 @@ public class PictureController {
      * @return 图片VO
      */
     @GetMapping("/get/vo")
-    @SaSpaceCheckPermission(SpaceUserPermissionConstants.PICTURE_VIEW)
     public MrsResult<?> getPictureVoById(
             @RequestParam(name = "id") Long pid,
             HttpServletRequest httpServletRequest) {

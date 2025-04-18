@@ -1,0 +1,129 @@
+package cloud.marisa.picturebackend.queue;
+
+import cloud.marisa.picturebackend.entity.dao.Picture;
+import cn.hutool.core.util.ObjUtil;
+import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
+import org.springframework.data.redis.core.RedisTemplate;
+import org.springframework.stereotype.Component;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * 图片溢出时如何保存
+ */
+@Log4j2
+@Component
+@RequiredArgsConstructor
+public class DatabaseOverflowStorage implements OverflowStorageDao<Picture> {
+
+    /**
+     * RedisTemplate
+     * <p>将数据存储到Redis中</p>
+     */
+    private final RedisTemplate<String, Object> redisTemplate;
+
+    /**
+     * 缓存图片对象的键前缀
+     */
+    private static final String REVIEW_PREFIX = "review-queue:picture";
+
+    /**
+     * 缓存图片ID列表的键前缀
+     */
+    private static final String ID_LIST_KEY = REVIEW_PREFIX + ":id-list";
+
+    @Override
+    public void save(Picture picture) {
+        Long pid = picture.getId();
+        String key = REVIEW_PREFIX + ":" + pid;
+        redisTemplate.opsForValue().set(key, picture);
+        log.info("保存了: {}", key);
+        // 两个redisTemplate是不一样的
+        // 一个存储的是对象，另一个存储的是id列表
+        Object o = redisTemplate.opsForValue().get(ID_LIST_KEY);
+
+        List<Long> ids = new ArrayList<>();
+        if (ObjUtil.isNotNull(o) && JSONUtil.isTypeJSONArray((String) o)) {
+            ids = JSONUtil.toList((String) o, Long.class);
+        }
+        ids.add(pid);
+        String str = JSONUtil.toJsonStr(ids);
+        redisTemplate.opsForValue().set(ID_LIST_KEY, str);
+        log.info("保存后的ID列表: {}", str);
+    }
+
+    @Override
+    public List<Picture> load() {
+        // 实际应根据状态查询未处理任务
+        Object json = redisTemplate.opsForValue().get(ID_LIST_KEY);
+        // id列表的json为空，说明没有任务处理
+        if (ObjUtil.isNotNull(json) || !JSONUtil.isTypeJSONArray((String) json)) {
+            return new ArrayList<>();
+        }
+        // id列表为空，说明没有任务处理
+        List<Long> collect = JSONUtil.toList((String) json, Long.class);
+        if (collect == null || collect.isEmpty()) {
+            return new ArrayList<>();
+        }
+        // 将ID和之前存储的时候的前缀拼接成完整的Key
+        Set<String> keys = collect.stream()
+                .map(id -> {
+                    if (id != null) {
+                        return REVIEW_PREFIX + ":" + id;
+                    }
+                    return null;
+                })
+                .filter(ObjUtil::isNotNull)
+                .collect(Collectors.toSet());
+        // 根据键列表获取对应的值
+        log.info("keys: {}", keys);
+        List<Object> objects = redisTemplate.opsForValue().multiGet(keys);
+        if (objects == null || objects.isEmpty()) {
+            return new ArrayList<>();
+        }
+        return objects.stream()
+                .map(o -> {
+                    String str = JSONUtil.toJsonStr(o);
+                    return JSONUtil.toBean(str, Picture.class);
+                })
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public void delete(List<Picture> pictures) {
+        Set<String> keys = pictures.stream()
+                .map(p -> REVIEW_PREFIX + ":" + p.getId())
+                .collect(Collectors.toSet());
+        log.info("删除了: {}", keys);
+        redisTemplate.delete(keys);
+        // 删除key
+        Set<Long> idSet = pictures.stream()
+                .map(Picture::getId)
+                .collect(Collectors.toSet());
+        Object json = redisTemplate.opsForValue().get(ID_LIST_KEY);
+        List<Long> ids = new ArrayList<>();
+        if (ObjUtil.isNotNull(json) && JSONUtil.isTypeJSONArray((String) json)) {
+            ids = JSONUtil.toList((String)json, Long.class);
+        }
+        if (!ids.isEmpty()) {
+            ids.removeAll(idSet);
+        }
+        // 删除后列表为空了，那就直接删除整个对象
+        if (ids.isEmpty()) {
+            log.info("键列表整体删除了: {}", ID_LIST_KEY);
+            redisTemplate.delete(ID_LIST_KEY);
+            return;
+        }
+        log.info("删除前的ID列表: {}", json);
+        // 不然就转成JSON覆盖保存
+        String jsonStr = JSONUtil.toJsonStr(ids);
+        log.info("删除后的ID列表: {}", jsonStr);
+        redisTemplate.opsForValue().set(ID_LIST_KEY, jsonStr);
+    }
+}

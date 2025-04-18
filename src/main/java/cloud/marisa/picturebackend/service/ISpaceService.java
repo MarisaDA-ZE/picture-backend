@@ -7,6 +7,7 @@ import cloud.marisa.picturebackend.entity.dto.space.SpaceAddRequest;
 import cloud.marisa.picturebackend.entity.dto.space.SpaceQueryRequest;
 import cloud.marisa.picturebackend.entity.dto.space.SpaceUpdateRequest;
 import cloud.marisa.picturebackend.entity.vo.SpaceVo;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 
@@ -43,6 +44,24 @@ public interface ISpaceService extends IService<Space> {
      * @return 是否更新成功
      */
     boolean updateSpace(SpaceUpdateRequest updateRequest);
+
+    /**
+     * 更新空间信息
+     * <p>附带清除缓存</p>
+     *
+     * @param updateWrapper 更新参数的Wrapper
+     * @param spaceId       空间ID
+     * @return 是否更新成功
+     */
+    boolean updateSpaceByCache(LambdaUpdateWrapper<Space> updateWrapper, Long spaceId);
+
+    /**
+     * 根据ID查询空间信息（有缓存）
+     *
+     * @param spaceId 空间ID
+     * @return 空间对象
+     */
+    Space getSpaceByIdCache(Long spaceId);
 
     /**
      * 创建一个空间

@@ -77,7 +77,7 @@ public class SpaceUserServiceImpl
         // 获取用户信息
         Long userId = spaceUser.getUserId();
         if (userId != null && userId > 0) {
-            UserVo userVo = userService.getUserVoById(userId);
+            UserVo userVo = userService.getUserVoByIdCache(userId);
             spaceUserVo.setUser(userVo);
         }
         // 获取空间信息

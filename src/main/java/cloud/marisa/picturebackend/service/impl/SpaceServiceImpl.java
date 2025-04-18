@@ -18,16 +18,23 @@ import cloud.marisa.picturebackend.service.ISpaceUserService;
 import cloud.marisa.picturebackend.service.IUserService;
 import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.util.EnumUtil;
+import cloud.marisa.picturebackend.util.cache.MrsCacheUtil;
+import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.toolkit.support.SFunction;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.extern.log4j.Log4j2;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.beans.BeanUtils;
 import org.springframework.context.annotation.Lazy;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.ObjectUtils;
@@ -36,6 +43,8 @@ import javax.annotation.Resource;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
+
+import static cloud.marisa.picturebackend.common.Constants.SPACE_CACHE_NAME;
 
 /**
  * 当有循环依赖的地方时，不要使用构造函数注入，此时应该使用属性注入或者Setter注入
@@ -74,6 +83,27 @@ public class SpaceServiceImpl
      */
     @Resource
     private RedissonClient redissonClient;
+
+    /**
+     * Redis缓存模板工具
+     */
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
+
+    /**
+     * 以图片ID为键时的缓存前缀
+     */
+    private static final String SPACE_ID = "space-id:";
+
+    /**
+     * 空间信息的本地缓存Caffeine
+     */
+    private final Cache<String, String> SPACE_LOCAL_CACHE = Caffeine.newBuilder()
+            .maximumSize(10000L)
+            // 5分钟后过期（5*60=300）
+            .expireAfterWrite(300, TimeUnit.SECONDS)
+            .build();
+
 
     @Override
     public Page<Space> getSpacePage(SpaceQueryRequest queryRequest, User loggedUser) {
@@ -129,18 +159,65 @@ public class SpaceServiceImpl
         BeanUtils.copyProperties(updateRequest, space);
         fillSpaceBySpaceLevel(space);
         validSpace(space, false);
-        long spaceId = space.getId() == null ? 0L : space.getId();
-        ThrowUtils.throwIf(spaceId < 0, ErrorCode.PARAMS_ERROR);
+        Long spaceId = space.getId();
+        // 更新空间信息，公共空间（id=0）不属于任何一个空间，所以ID非法
+        ThrowUtils.throwIf(spaceId == null || spaceId <= 0, ErrorCode.PARAMS_ERROR);
         // 判断空间是否存在
         boolean exists = this.lambdaQuery().eq(Space::getId, spaceId).exists();
         if (!exists) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "空间不存在");
         }
+        String cacheKey = SPACE_CACHE_NAME + SPACE_ID + spaceId;
+        List<String> cacheKeys = Collections.singletonList(cacheKey);
+        MrsCacheUtil.removeCache(SPACE_LOCAL_CACHE, redisTemplate, cacheKeys);
         boolean updated = this.updateById(space);
+        // 通过线程池异步延迟删除缓存
+        MrsCacheUtil.delayRemoveCache(SPACE_LOCAL_CACHE, redisTemplate, cacheKeys, 3);
         if (!updated) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR);
         }
         return true;
+    }
+
+    @Override
+    public boolean updateSpaceByCache(LambdaUpdateWrapper<Space> updateWrapper, Long spaceId) {
+        String cacheKey = SPACE_CACHE_NAME + SPACE_ID + spaceId;
+        List<String> cacheKeys = Collections.singletonList(cacheKey);
+        MrsCacheUtil.removeCache(SPACE_LOCAL_CACHE, redisTemplate, cacheKeys);
+        boolean updated = this.update(updateWrapper);
+        // 通过线程池异步延迟删除缓存
+        MrsCacheUtil.delayRemoveCache(SPACE_LOCAL_CACHE, redisTemplate, cacheKeys, 3);
+        return updated;
+    }
+
+    @Override
+    public Space getSpaceByIdCache(Long spaceId) {
+        // 多级缓存
+        String cacheKey = SPACE_CACHE_NAME + SPACE_ID + spaceId;
+        log.info("getSpaceByIdCache 缓存的key: {}", cacheKey);
+        String cacheJson = SPACE_LOCAL_CACHE.getIfPresent(cacheKey);
+        Space space = JSONUtil.toBean(cacheJson, Space.class);
+        // 本地缓存中没有，尝试从redis缓存中取
+        if (cacheJson == null) {
+            Object cacheRedis = redisTemplate.opsForValue().get(cacheKey);
+            // redis缓存命中
+            if (cacheRedis != null) {
+                String jsonStr = JSONUtil.toJsonStr(cacheRedis);
+                space = JSONUtil.toBean(jsonStr, Space.class);
+            } else {
+                // 两层缓存中都没有，去数据库中查
+                space = this.getById(spaceId);
+                // 空间真的不存在
+                if (space == null) {
+                    throw new BusinessException(ErrorCode.NOT_FOUND, "空间不存在");
+                }
+            }
+        }
+        SPACE_LOCAL_CACHE.put(cacheKey, JSONUtil.toJsonStr(space));
+        // 设置随机过期时间（5分钟），防止雪崩
+        int offset = RandomUtil.randomInt(0, 300);
+        redisTemplate.opsForValue().set(cacheKey, space, 300 + offset, TimeUnit.SECONDS);
+        return space;
     }
 
     @Override
@@ -245,7 +322,7 @@ public class SpaceServiceImpl
         if (spaceId < 0) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
-        Space space = this.getById(spaceId);
+        Space space = this.getSpaceByIdCache(spaceId);
         if (space == null) {
             throw new BusinessException(ErrorCode.NOT_FOUND, "空间不存在");
         }
@@ -254,7 +331,14 @@ public class SpaceServiceImpl
         if (!userId.equals(space.getUserId()) && !isAdmin) {
             throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "无空间访问权限");
         }
-        return this.removeById(spaceId);
+        // 缓存双删
+        String cacheKey = SPACE_CACHE_NAME + SPACE_ID + spaceId;
+        List<String> cacheKeys = Collections.singletonList(cacheKey);
+        MrsCacheUtil.removeCache(SPACE_LOCAL_CACHE, redisTemplate, cacheKeys);
+        boolean removed = this.removeById(spaceId);
+        // 通过线程池异步延迟删除缓存
+        MrsCacheUtil.delayRemoveCache(SPACE_LOCAL_CACHE, redisTemplate, cacheKeys, 3);
+        return removed;
     }
 
     @Override
@@ -263,7 +347,7 @@ public class SpaceServiceImpl
             throw new BusinessException(ErrorCode.NOT_FOUND, "空间不存在");
         }
         SpaceVo vo = SpaceVo.toVo(space);
-        UserVo userVo = userService.getUserVoById(space.getUserId());
+        UserVo userVo = userService.getUserVoByIdCache(space.getUserId());
         vo.setUser(userVo);
         return vo;
     }

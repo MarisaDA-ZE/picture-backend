@@ -144,7 +144,7 @@ public class UserController {
      */
     @GetMapping("/get/vo")
     public MrsResult<?> getVo(@RequestParam Long id) {
-        UserVo userVo = userService.getUserVoById(id);
+        UserVo userVo = userService.getUserVoByIdCache(id);
         return MrsResult.ok(userVo);
     }
 

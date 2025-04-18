@@ -15,8 +15,8 @@ import java.util.concurrent.TimeUnit;
 @Configuration
 public class ThreadPoolConfig {
 
-    @Bean
-    public ThreadPoolExecutor threadPoolExecutor() {
+    @Bean("editBatchPoolExecutor")
+    public ThreadPoolExecutor editBatchPoolExecutor() {
         return new ThreadPoolExecutor(
                 8,
                 24,
@@ -25,5 +25,21 @@ public class ThreadPoolConfig {
                 new ArrayBlockingQueue<>(12),
                 new ThreadPoolExecutor.AbortPolicy()
         );
+    }
+
+    /**
+     * 这个线程池用于处理AI图片审核的异步任务
+     *
+     * @return 一个线程池
+     */
+    @Bean("asyncReviewThreadPool")
+    public ThreadPoolExecutor asyncReviewThreadPool() {
+        return new ThreadPoolExecutor(
+                6,
+                12,
+                64,
+                TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(16),
+                new ThreadPoolExecutor.AbortPolicy());
     }
 }

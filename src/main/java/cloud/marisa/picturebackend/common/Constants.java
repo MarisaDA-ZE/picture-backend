@@ -31,6 +31,15 @@ public class Constants {
     /**
      * 用户服务的缓存前缀
      */
-    public static final String USER_CACHE_PREFIX = "user:";
+    public static final String USER_CACHE_NAME = "user:";
 
+    /**
+     * 用户服务的缓存前缀
+     */
+    public static final String PICTURE_CACHE_NAME = "picture:";
+
+    /**
+     * 空间服务的缓存前缀
+     */
+    public static final String SPACE_CACHE_NAME = "space:";
 }

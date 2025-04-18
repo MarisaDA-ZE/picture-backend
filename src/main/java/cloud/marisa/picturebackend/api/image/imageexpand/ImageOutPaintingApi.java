@@ -27,7 +27,7 @@ import org.springframework.stereotype.Component;
 @Slf4j
 @Component
 public class ImageOutPaintingApi {
-    @Value("${mrs.api.bailian-sk}")
+    @Value("${mrs.aliyun.bailian-ai.access-key-secret}")
     private String API_KEY;
 
     /**

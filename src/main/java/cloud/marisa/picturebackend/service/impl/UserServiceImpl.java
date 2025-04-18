@@ -40,7 +40,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static cloud.marisa.picturebackend.common.Constants.USER_CACHE_PREFIX;
+import static cloud.marisa.picturebackend.common.Constants.USER_CACHE_NAME;
 import static cloud.marisa.picturebackend.common.Constants.USER_LOGIN;
 
 /**
@@ -198,7 +198,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         dbUser.setId(id);   // id 不能被修改
         dbUser.setUserPassword(password);   // 更新密码
         // 删除缓存
-        String cacheKey = USER_CACHE_PREFIX + ID_PREFIX + id;
+        String cacheKey = USER_CACHE_NAME + ID_PREFIX + id;
         List<String> cacheKeys = Collections.singletonList(cacheKey);
         MrsCacheUtil.removeCache(USER_LOCAL_CACHE, redisTemplate, cacheKeys);
         // 更新库中的数据
@@ -226,21 +226,22 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
     }
 
     @Override
-    public UserVo getUserVoById(Long id) {
+    public UserVo getUserVoByIdCache(Long id) {
         if (id == null) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "id不能为空");
         }
         // 多级缓存技术
-        String cacheKey = USER_CACHE_PREFIX + ID_PREFIX + id;
+        String cacheKey = USER_CACHE_NAME + ID_PREFIX + id;
         log.info("缓存的key: {}", cacheKey);
-        String userJSON = USER_LOCAL_CACHE.getIfPresent(cacheKey);
-        User user = JSONUtil.toBean(userJSON, User.class);
+        String cacheJson = USER_LOCAL_CACHE.getIfPresent(cacheKey);
+        User user = JSONUtil.toBean(cacheJson, User.class);
         // 本地缓存中没有，尝试从redis缓存中取
-        if (user == null) {
+        if (cacheJson == null) {
             Object cacheRedis = redisTemplate.opsForValue().get(cacheKey);
             // redis缓存命中
             if (cacheRedis != null) {
-                user = (User) cacheRedis;
+                String jsonStr = JSONUtil.toJsonStr(cacheRedis);
+                user = JSONUtil.toBean(jsonStr, User.class);
             } else {
                 // 两层缓存中都没有，去数据库中查
                 user = this.getById(id);
@@ -263,7 +264,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "id不能为空");
         }
         // 删除缓存
-        String cacheKey = USER_CACHE_PREFIX + ID_PREFIX + id;
+        String cacheKey = USER_CACHE_NAME + ID_PREFIX + id;
         List<String> cacheKeys = Collections.singletonList(cacheKey);
         MrsCacheUtil.removeCache(USER_LOCAL_CACHE, redisTemplate, cacheKeys);
         // 删库中的数据
@@ -283,7 +284,7 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         }
         // 删除缓存
         List<String> cacheKeys = ids.stream()
-                .map(id -> USER_CACHE_PREFIX + ID_PREFIX + id)
+                .map(id -> USER_CACHE_NAME + ID_PREFIX + id)
                 .collect(Collectors.toList());
         MrsCacheUtil.removeCache(USER_LOCAL_CACHE, redisTemplate, cacheKeys);
         boolean removed = this.removeByIds(ids);

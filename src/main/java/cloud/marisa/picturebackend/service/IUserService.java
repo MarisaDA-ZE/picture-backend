@@ -102,7 +102,7 @@ public interface IUserService extends IService<User> {
      * @param id 用户ID
      * @return 用户VO对象 或 null
      */
-    UserVo getUserVoById(Long id);
+    UserVo getUserVoByIdCache(Long id);
 
     /**
      * 根据ID删除一个用户
