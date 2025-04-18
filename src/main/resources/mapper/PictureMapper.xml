@@ -69,9 +69,10 @@
         SUM(pic_size) AS totalSize
         FROM `picture`
         WHERE
-        is_delete = 0
+        is_delete = 0 AND
+        review_status = 1
         <if test="request.queryPublic">
-            AND space_id IS NULL
+            AND space_id = 0
         </if>
         <if test="request.spaceId != null">
             AND space_id = #{request.spaceId}

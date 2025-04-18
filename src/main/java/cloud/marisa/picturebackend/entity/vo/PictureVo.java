@@ -40,7 +40,7 @@ public class PictureVo implements Serializable {
     /**
      * 用户信息
      */
-    private UserVo userVo;
+    private UserVo user;
 
     /**
      * 空间信息

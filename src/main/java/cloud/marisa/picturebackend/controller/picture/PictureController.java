@@ -21,6 +21,7 @@ import cloud.marisa.picturebackend.exception.ThrowUtils;
 import cloud.marisa.picturebackend.manager.auth.StpKit;
 import cloud.marisa.picturebackend.manager.auth.constant.SpaceUserPermissionConstants;
 import cloud.marisa.picturebackend.service.IPictureService;
+import cloud.marisa.picturebackend.service.ISpaceAnalyzeService;
 import cloud.marisa.picturebackend.service.IUserService;
 import cn.hutool.core.util.RandomUtil;
 import cn.hutool.core.util.StrUtil;
@@ -29,6 +30,7 @@ import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.github.benmanes.caffeine.cache.Cache;
 import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.util.DigestUtils;
@@ -53,6 +55,7 @@ import static cloud.marisa.picturebackend.common.Constants.PICTURE_CACHE_PREFIX;
  * @description 图片控制类
  * @date 2025/3/29
  */
+@Log4j2
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/picture")
@@ -70,6 +73,11 @@ public class PictureController {
      * 图片服务
      */
     private final IPictureService pictureService;
+
+    /**
+     * 空间统计服务
+     */
+    private final ISpaceAnalyzeService spaceAnalyzeService;
 
     /**
      * AI扩图服务API
@@ -488,9 +496,45 @@ public class PictureController {
      */
     @GetMapping("/tag_category")
     public MrsResult<PictureTagCategory> listPictureTagCategory() {
+        List<String> categoryList = null;
+        List<String> tagList = null;
+        String categoriesKey = "hot:picture-categories";
+        String tagsKey = "hot:picture-tags";
+        String categoriesJSON = redisTemplate.opsForValue().get(categoriesKey);
+        String tagsJSON = redisTemplate.opsForValue().get(tagsKey);
+        if (categoriesJSON != null) {
+            categoryList = JSONUtil.toList(categoriesJSON, String.class);
+        }
+        if (tagsJSON != null) {
+            tagList = JSONUtil.toList(tagsJSON, String.class);
+        }
+
+        if (categoryList == null) {
+            categoryList = Arrays.asList("模板", "电商", "表情包", "素材", "海报");
+            List<String> hotCategories = spaceAnalyzeService.getPublicHotCategories(6);
+            log.info("hot categories: {}", hotCategories);
+            if (hotCategories != null && !hotCategories.isEmpty()) {
+                categoryList = hotCategories;
+            }
+            // 更新缓存
+            String value = JSONUtil.toJsonStr(categoryList);
+            // 分类一天变更一次
+            redisTemplate.opsForValue().set(categoriesKey, value, 1, TimeUnit.DAYS);
+        }
+
+        if (tagList == null) {
+            tagList = Arrays.asList("热门", "搞笑", "生活", "高清", "艺术", "校园", "背景", "简历", "创意");
+            List<String> hotTags = spaceAnalyzeService.getPublicHotTags(10);
+            log.info("hot tags: {}", hotTags);
+            if (hotTags != null && !hotTags.isEmpty()) {
+                tagList = hotTags;
+            }
+            // 更新缓存
+            String value = JSONUtil.toJsonStr(tagList);
+            // 分类一天变更一次
+            redisTemplate.opsForValue().set(tagsKey, value, 1, TimeUnit.DAYS);
+        }
         PictureTagCategory tagCategory = new PictureTagCategory();
-        List<String> tagList = Arrays.asList("热门", "搞笑", "生活", "高清", "艺术", "校园", "背景", "简历", "创意");
-        List<String> categoryList = Arrays.asList("模板", "电商", "表情包", "素材", "海报");
         tagCategory.setTagList(tagList);
         tagCategory.setCategoryList(categoryList);
         return MrsResult.ok(tagCategory);

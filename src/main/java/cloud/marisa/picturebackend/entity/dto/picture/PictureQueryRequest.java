@@ -104,7 +104,7 @@ public class PictureQueryRequest extends PageRequest implements Serializable {
     /**
      * 图片相似度
      */
-    private Float picSimilarity = 0.97f;
+    private Float picSimilarity;
 
     /**
      * 审核状态（0:待审核，1:已通过，2:已拒绝）
