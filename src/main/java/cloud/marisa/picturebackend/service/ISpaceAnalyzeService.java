@@ -34,6 +34,13 @@ public interface ISpaceAnalyzeService {
     List<SpaceCategoryAnalyzeResponse> getSpaceCategoryAnalyze(SpaceCategoryAnalyzeRequest analyzeRequest, User loginUser);
 
     /**
+     * 获取公共空间热门类别
+     *
+     * @return 热门类别列表
+     */
+    List<String> getPublicHotCategories(int maxCount);
+
+    /**
      * 获取空间标签统计分析
      *
      * @param analyzeRequest 标签分析参数DTO封装
@@ -41,6 +48,13 @@ public interface ISpaceAnalyzeService {
      * @return 分析结果的DTO封装
      */
     List<SpaceTagAnalyzeResponse> getSpaceTagAnalyze(SpaceTagAnalyzeRequest analyzeRequest, User loginUser);
+
+    /**
+     * 获取公共空间热门分类
+     *
+     * @return 热门分类列表
+     */
+    List<String> getPublicHotTags(int maxCount);
 
     /**
      * 获取空间图片大小统计分析

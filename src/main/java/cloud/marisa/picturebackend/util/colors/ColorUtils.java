@@ -213,16 +213,9 @@ public class ColorUtils {
     }
 
     public static void main(String[] args) {
-        Map<?, ?> map = new HashMap<>();
-        Map<?, ?> map1 = new HashMap<>(16);
-        Map<?, ?> map2 = new HashMap<>(16, 0.5f);
-        // 测试颜色
-        // double similarity = calculateSimilarity("(100,123,66)", "0xFFF000");
-        // System.out.println("颜色相似度为：" + similarity);
-
-        Color color = ColorUtils.getRandomColor();
-        MrsColorHSV hsv = ColorUtils.toHSV(color);
-        System.out.println(hsv);
+        Color decode = Color.decode("0x21354a");
+        System.out.println(decode);
+        System.out.println(toHexString(decode));
     }
 }
 

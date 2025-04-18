@@ -19,8 +19,9 @@ import cloud.marisa.picturebackend.exception.ThrowUtils;
 import cloud.marisa.picturebackend.manager.auth.SpaceUserAuthManager;
 import cloud.marisa.picturebackend.manager.auth.StpKit;
 import cloud.marisa.picturebackend.manager.auth.constant.SpaceUserPermissionConstants;
+import cloud.marisa.picturebackend.manager.upload.PictureUploadManager;
 import cloud.marisa.picturebackend.mapper.PictureMapper;
-import cloud.marisa.picturebackend.queue.PersistentFallbackQueue;
+import cloud.marisa.picturebackend.queue.OverflowStorageDao;
 import cloud.marisa.picturebackend.service.IPictureService;
 import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.service.IUserService;
@@ -90,6 +91,9 @@ public class PictureServiceImpl
     @Value("${mrs.picture-bath-url}")
     private String pictureBathUrl;
 
+    @Value("${mrs.color-search.similarity}")
+    private Float similarity;
+
     /**
      * MinIO分布式存储工具类
      */
@@ -121,6 +125,18 @@ public class PictureServiceImpl
     private final PictureMultipartFileUpload pictureMultipartFileUpload;
 
     /**
+     * 是否上传到自建文件存储服务器
+     * <p>true-上传到MinIO；false-上传到阿里云</p>
+     */
+    @Value("${mrs.file.picture.is-use-oss:false}")
+    private Boolean useOss;
+
+    /**
+     * 图片上传服务（通过文件流上传到OSS服务器）
+     */
+    private final PictureUploadManager ossPictureUploadManager;
+
+    /**
      * 动态线程池
      */
     private final ThreadPoolExecutor editBatchPoolExecutor;
@@ -144,7 +160,7 @@ public class PictureServiceImpl
      * 简易任务队列
      * <p>如果任务满了，会持久化到Redis</p>
      */
-    private final PersistentFallbackQueue reviewQueue;
+    private final OverflowStorageDao<Picture> storage;
 
     /**
      * 以图片ID为键时的缓存前缀
@@ -254,7 +270,17 @@ public class PictureServiceImpl
             // 库中不存在，走正常上传逻辑
             if (repeatPicture == null) {
                 // 保存图片到文件服务器
-                UploadPictureResult uploadResult = pictureMultipartFileUpload.uploadPictureObject(inputSource, uploadPath);
+                UploadPictureResult uploadResult;
+                if (useOss != null && useOss) {
+                    String fileName = pictureMultipartFileUpload.getFileName(inputSource);
+                    InputStream is = pictureMultipartFileUpload.getPictureStream(inputSource);
+                    log.info("上传文件名：{}", fileName);
+                    log.info("上传路径：{}", uploadPath);
+                    uploadResult = ossPictureUploadManager
+                            .uploadPictureInputStream(fileName, uploadPath, is);
+                } else {
+                    uploadResult = pictureMultipartFileUpload.uploadPictureObject(inputSource, uploadPath);
+                }
                 log.info("上传耗时: {}", (System.currentTimeMillis() - current));
                 log.info("原始上传数据 {}", uploadResult);
                 picture = getPicture(loginUser, uploadResult);
@@ -271,10 +297,20 @@ public class PictureServiceImpl
         } else {
             // 通过URL的方式上传图片，这个没办法做秒传，无法单凭一个URL就拿到目标文件的MD5
             // 此外还要兼容一些随机图的API，所以也没法把URL字符串直接MD5做标识
-            UploadPictureResult uploadResult = pictureUrlUpload.uploadPictureObject(inputSource, uploadPath);
+            UploadPictureResult uploadResult;
+            if (useOss != null && useOss) {
+                String fileName = pictureUrlUpload.getFileName(inputSource);
+                InputStream is = pictureUrlUpload.getPictureStream(inputSource);
+                log.info("上传文件名：{}", fileName);
+                log.info("上传路径：{}", uploadPath);
+                uploadResult = ossPictureUploadManager
+                        .uploadPictureInputStream(fileName, uploadPath, is);
+            } else {
+                uploadResult = pictureUrlUpload.uploadPictureObject(inputSource, uploadPath);
+            }
+            picture = getPicture(loginUser, uploadResult);
             log.info("上传耗时: {}", (System.currentTimeMillis() - current));
             log.info("原始上传数据 {}", uploadResult);
-            picture = getPicture(loginUser, uploadResult);
         }
         // 公共空间 id=0L, 私人空间 id=<雪花ID>
         picture.setSpaceId(spaceId);
@@ -343,9 +379,11 @@ public class PictureServiceImpl
                 }
             }
             // 啥都完成了，如果不是管理员上传图片，就将内容推给AI审核
-            // 这里推到本地队列，在AI审核服务那里进行消费
-            // 队列满了，数据会持久化到Redis
-            reviewQueue.add(picture);
+            // 这里推到Redis，在AI审核服务那里进行取ID和图片进行处理
+            if (Objects.equals(picture.getReviewStatus(), ReviewStatus.PENDING.getValue())) {
+                log.info("非管理员上传，保存图片数据到Redis");
+                storage.save(picture);
+            }
             return null;
         });
         return PictureVo.toVO(picture);
@@ -693,6 +731,7 @@ public class PictureServiceImpl
         Picture picture = new Picture();
         picture.setUserId(loginUser.getId());
         String originalPath = dbPicture.getOriginalPath();
+        log.info("originalPath: {}", originalPath);
         String fileName = originalPath.substring(originalPath.lastIndexOf("/"));
         picture.setName(fileName);
         // 默认图
@@ -926,7 +965,10 @@ public class PictureServiceImpl
         // 近似色查找，范围匹配
         if (StrUtil.isNotBlank(queryRequest.getPicColor())) {
             String picColor = queryRequest.getPicColor();
-            applyColorCondition(queryWrapper, picColor, queryRequest.getPicSimilarity());
+            // 配置文件参数
+            applyColorCondition(queryWrapper, picColor, similarity);
+            // 前端传递相似度
+            // applyColorCondition(queryWrapper, picColor, queryRequest.getPicSimilarity());
         }
         // 排序
         if (StrUtil.isNotBlank(queryRequest.getSortField())) {
@@ -1013,7 +1055,7 @@ public class PictureServiceImpl
                 permissions = spaceUserAuthManager.getPermissionList(space, loggedUser);
             }
             vo.setPermissionList(permissions);
-            vo.setUserVo(userVo);
+            vo.setUser(userVo);
         }
         log.info("pictureVo: {}", vo);
         return vo;
@@ -1052,9 +1094,9 @@ public class PictureServiceImpl
                         vo.setUrl(null);
                         vo.setOriginalUrl(null);
                         if (userVos.containsKey(picture.getUserId())) {
-                            vo.setUserVo(userVos.get(picture.getUserId()).get(0));
+                            vo.setUser(userVos.get(picture.getUserId()).get(0));
                         } else {
-                            vo.setUserVo(null);
+                            vo.setUser(null);
                         }
                         // 公共图库权限列表
                         List<String> permissions = spaceUserAuthManager.getPermissionsByRole(MrsSpaceRole.VIEWER.getValue());
@@ -1216,8 +1258,8 @@ public class PictureServiceImpl
         if (similarity <= 0 || similarity > 1) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR, "相似度需在(0,1]之间但实际是 " + similarity);
         }
-        System.out.println("搜索颜色: " + searchColor);
-        System.out.println("相似度: " + similarity);
+        log.info("搜索颜色: {}", searchColor);
+        log.info("相似度: {}", similarity);
         // Step 1: 转换RGB到HSV和分桶
         MrsColorHSV colorHSV = ColorUtils.toHSV(searchColor);
         float hue = colorHSV.getHue();
@@ -1233,9 +1275,9 @@ public class PictureServiceImpl
         List<Integer> satBuckets = calculateLinearBuckets(colorHSV.getSaturationBucket(), satTolerance);
         int valTolerance = (int) Math.ceil(satValRange / 10);
         List<Integer> valBuckets = calculateLinearBuckets(colorHSV.getValueBucket(), valTolerance);
-        System.out.println("色调桶范围: " + hueBuckets.stream().sorted().collect(Collectors.toList()));
-        System.out.println("饱和度范围: " + satBuckets.stream().sorted().collect(Collectors.toList()));
-        System.out.println("明度桶范围: " + valBuckets.stream().sorted().collect(Collectors.toList()));
+        log.info("色调桶范围: {}", hueBuckets.stream().sorted().collect(Collectors.toList()));
+        log.info("饱和度范围: {}", satBuckets.stream().sorted().collect(Collectors.toList()));
+        log.info("明度桶范围: {}", valBuckets.stream().sorted().collect(Collectors.toList()));
         // Step 4: 构建查询条件
         wrapper
                 // 色调分桶范围过滤
@@ -1248,7 +1290,7 @@ public class PictureServiceImpl
                 .apply("ABS(m_color_saturation - {0}) <= {1}", sat, satValRange)
                 // 明度差异
                 .apply("ABS(m_color_value - {0}) <= {1}", vak, satValRange);
-        System.out.println("SQL: " + wrapper.getSqlSegment());
+        log.info("SQL: {}", wrapper.getSqlSegment());
 
     }
 

@@ -5,8 +5,11 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.*;
+import java.util.stream.Collectors;
 
 /**
  * @author MarisaDAZE
@@ -101,6 +104,12 @@ public class MrsCacheUtil {
             log.info("开始删除缓存: {}", keys);
             // 删除本地缓存
             localCache.invalidateAll(keys);
+
+            List<RT> rts = redisTemplate.opsForValue().multiGet(keys);
+            if (rts == null || rts.isEmpty()) {
+                log.info("Redis中不存在键: {}", keys);
+                return true;
+            }
             // 删除Redis缓存
             Long removed = redisTemplate.delete(keys);
             return removed != null && removed > 0;

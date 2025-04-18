@@ -37,22 +37,23 @@ public class DatabaseOverflowStorage implements OverflowStorageDao<Picture> {
      * 缓存图片ID列表的键前缀
      */
     private static final String ID_LIST_KEY = REVIEW_PREFIX + ":id-list";
+    private static final String PROCESSING = "-processing";
 
     @Override
     public void save(Picture picture) {
         Long pid = picture.getId();
         String key = REVIEW_PREFIX + ":" + pid;
         redisTemplate.opsForValue().set(key, picture);
-        log.info("保存了: {}", key);
+        log.info("任务保存操作，保存了: {}", key);
         // 两个redisTemplate是不一样的
         // 一个存储的是对象，另一个存储的是id列表
         Object o = redisTemplate.opsForValue().get(ID_LIST_KEY);
 
-        List<Long> ids = new ArrayList<>();
+        List<String> ids = new ArrayList<>();
         if (ObjUtil.isNotNull(o) && JSONUtil.isTypeJSONArray((String) o)) {
-            ids = JSONUtil.toList((String) o, Long.class);
+            ids = JSONUtil.toList((String) o, String.class);
         }
-        ids.add(pid);
+        ids.add(String.valueOf(pid));
         String str = JSONUtil.toJsonStr(ids);
         redisTemplate.opsForValue().set(ID_LIST_KEY, str);
         log.info("保存后的ID列表: {}", str);
@@ -63,7 +64,7 @@ public class DatabaseOverflowStorage implements OverflowStorageDao<Picture> {
         // 实际应根据状态查询未处理任务
         Object json = redisTemplate.opsForValue().get(ID_LIST_KEY);
         // id列表的json为空，说明没有任务处理
-        if (ObjUtil.isNotNull(json) || !JSONUtil.isTypeJSONArray((String) json)) {
+        if (ObjUtil.isNull(json) || !JSONUtil.isTypeJSONArray((String) json)) {
             return new ArrayList<>();
         }
         // id列表为空，说明没有任务处理
@@ -96,23 +97,75 @@ public class DatabaseOverflowStorage implements OverflowStorageDao<Picture> {
     }
 
     @Override
+    public Picture loadOne() {
+        // 实际应根据状态查询未处理任务
+        Object json = redisTemplate.opsForValue().get(ID_LIST_KEY);
+        // id列表的json为空，说明没有任务处理
+        log.info("ID列表的JSON {}", json);
+        if (ObjUtil.isNull(json) || !JSONUtil.isTypeJSONArray((String) json)) {
+            return null;
+        }
+        // id列表为空，说明没有任务处理
+        List<String> collect = JSONUtil.toList((String) json, String.class);
+        if (collect == null || collect.isEmpty()) {
+            return null;
+        }
+        String pid = null;
+        for (String id : collect) {
+            // 取第一个不是空且不是正在处理的图片ID
+            if (id != null && !id.endsWith(PROCESSING)) {
+                pid = id;
+                break;
+            }
+        }
+        if (pid == null) {
+            log.info("任务队列中的所有图片均在处理中...");
+            return null;
+        }
+        String key = REVIEW_PREFIX + ":" + pid;
+        log.info("将要处理: {}", pid);
+        Object object = redisTemplate.opsForValue().get(key);
+        collect.remove(pid);
+        if (object == null) {
+            String jsonStr = JSONUtil.toJsonStr(collect);
+            redisTemplate.opsForValue().set(ID_LIST_KEY, jsonStr);
+            return null;
+        }
+        collect.add(pid + PROCESSING);
+        String jsonStr = JSONUtil.toJsonStr(collect);
+        log.info("更新ID列表: {}", jsonStr);
+        redisTemplate.opsForValue().set(ID_LIST_KEY, jsonStr);
+        // 返回图片对象
+        String str = JSONUtil.toJsonStr(object);
+        return JSONUtil.toBean(str, Picture.class);
+    }
+
+    @Override
     public void delete(List<Picture> pictures) {
         Set<String> keys = pictures.stream()
                 .map(p -> REVIEW_PREFIX + ":" + p.getId())
                 .collect(Collectors.toSet());
-        log.info("删除了: {}", keys);
+        log.info("需要删除: {}", keys);
         redisTemplate.delete(keys);
         // 删除key
-        Set<Long> idSet = pictures.stream()
+        Set<String> idSet = pictures.stream()
                 .map(Picture::getId)
+                .map(String::valueOf)
                 .collect(Collectors.toSet());
+        // 取出ID列表
         Object json = redisTemplate.opsForValue().get(ID_LIST_KEY);
-        List<Long> ids = new ArrayList<>();
+        List<String> ids = new ArrayList<>();
         if (ObjUtil.isNotNull(json) && JSONUtil.isTypeJSONArray((String) json)) {
-            ids = JSONUtil.toList((String)json, Long.class);
+            ids = JSONUtil.toList((String) json, String.class);
         }
         if (!ids.isEmpty()) {
+            Set<String> processSet = idSet.stream()
+                    .map(id -> id + PROCESSING)
+                    .collect(Collectors.toSet());
+            // 直接删除键
             ids.removeAll(idSet);
+            // 它们也可能是正在处理的图片
+            ids.removeAll(processSet);
         }
         // 删除后列表为空了，那就直接删除整个对象
         if (ids.isEmpty()) {

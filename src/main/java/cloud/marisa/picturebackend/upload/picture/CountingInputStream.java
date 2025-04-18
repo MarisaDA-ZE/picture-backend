@@ -25,7 +25,7 @@ public class CountingInputStream extends BufferedInputStream {
      * @param in the underlying input stream, or <code>null</code> if
      *           this instance is to be created without an underlying stream.
      */
-    protected CountingInputStream(InputStream in) {
+    public CountingInputStream(InputStream in) {
         super(in);
         size = 0;
     }

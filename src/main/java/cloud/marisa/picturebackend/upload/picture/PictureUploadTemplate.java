@@ -1,5 +1,6 @@
 package cloud.marisa.picturebackend.upload.picture;
 
+import cloud.marisa.picturebackend.api.image.AliyunOssUtil;
 import cloud.marisa.picturebackend.config.PictureConfig;
 import cloud.marisa.picturebackend.entity.dto.file.UploadPictureResult;
 import cloud.marisa.picturebackend.exception.BusinessException;
@@ -15,11 +16,14 @@ import cn.hutool.core.util.NumberUtil;
 import cn.hutool.crypto.digest.MD5;
 import lombok.AllArgsConstructor;
 import lombok.Data;
+import lombok.RequiredArgsConstructor;
 import lombok.ToString;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import javax.annotation.Resource;
 import javax.imageio.ImageIO;
 import java.awt.*;
 import java.awt.image.BufferedImage;
@@ -42,10 +46,17 @@ import static cloud.marisa.picturebackend.common.Constants.THUMB_MAX_SIZE;
 @Component
 public abstract class PictureUploadTemplate {
 
-    @Autowired
+    /**
+     * MinIO上传工具类
+     */
+    @Resource
     private MinioUtil minioUtil;
 
-    @Autowired
+
+    /**
+     * 图片配置信息
+     */
+    @Resource
     private PictureConfig pictureConfig;
 
     /**
@@ -74,7 +85,8 @@ public abstract class PictureUploadTemplate {
             Path tempFile = Files.createTempFile("copy", ".tmp");
             Files.copy(inputStream, tempFile, StandardCopyOption.REPLACE_EXISTING);
             // 获取图片信息（原图信息）
-            getPictureInfo(Files.newInputStream(tempFile), result);
+            UploadPictureResult pictureInfo = ImageUtil.getPictureInfo(Files.newInputStream(tempFile));
+            BeanUtils.copyProperties(pictureInfo, result);
             String suffix = result.getPicFormat();
             // 处理上传后的文件名
             thumbInfo = createFileName("thumb-" + fileName, compressSuffix, pathPrefix);
@@ -187,45 +199,6 @@ public abstract class PictureUploadTemplate {
         String uploadPath = (pathPrefix.endsWith("/") ? pathPrefix : pathPrefix + "/") + uploadName;
         return new FileNameInfo(uploadName, suffix, uploadPath);
     }
-
-    /**
-     * 获取图片信息
-     *
-     * @param is     输入流
-     * @param result 图片信息对象
-     */
-    public final void getPictureInfo(InputStream is, UploadPictureResult result) {
-        // 获取图片的长宽比信息
-        try (CountingInputStream cis = new CountingInputStream(is)) {
-            // 读取前 8 个字节用于检测文件类型
-            cis.mark(8);
-            byte[] header = new byte[8];
-            int bytesRead = cis.read(header);
-            cis.reset(); // 重置流供后续读取
-            // 从字节数组中获取图片类型
-            String pictureType = MrsStreamUtil.determineFileType(header, bytesRead);
-            BufferedImage bufferedImage = ImageIO.read(cis);
-            if (bufferedImage == null) {
-                throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件读取失败");
-            }
-            // 获取图像大小（-8是前面指针重置有点问题，导致文件大小会少1B）
-            // 但又不影响正常使用
-            long picSize = cis.getSize() - 8;
-            int width = bufferedImage.getWidth();
-            int height = bufferedImage.getHeight();
-            double scale = NumberUtil.round(width * 1.0 / height, 2).doubleValue();
-            result.setPicWidth(width);
-            result.setPicHeight(height);
-            result.setPicScale(scale);
-            result.setPicSize(picSize);
-            result.setPicFormat(pictureType);
-            log.info("图片信息: {}", result);
-        } catch (IOException e) {
-            log.error("文件读取失败: ", e);
-            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "文件读取失败");
-        }
-    }
-
     @Data
     @ToString
     @AllArgsConstructor

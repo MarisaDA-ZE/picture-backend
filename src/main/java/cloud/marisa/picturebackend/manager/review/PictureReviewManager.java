@@ -6,7 +6,7 @@ import cloud.marisa.picturebackend.api.picgreen.MrsPictureIllegal;
 import cloud.marisa.picturebackend.config.aliyun.green.MrsImageModeration;
 import cloud.marisa.picturebackend.entity.dao.Picture;
 import cloud.marisa.picturebackend.enums.ReviewStatus;
-import cloud.marisa.picturebackend.queue.PersistentFallbackQueue;
+import cloud.marisa.picturebackend.queue.OverflowStorageDao;
 import cloud.marisa.picturebackend.service.IPictureService;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
@@ -55,18 +55,13 @@ public class PictureReviewManager {
     @Resource
     private ImageModerationApi imageModerationApi;
 
-    /**
-     * 简易任务队列
-     * <p>如果任务满了，会持久化到Redis</p>
-     */
     @Resource
-    private PersistentFallbackQueue reviewQueue;
+    private OverflowStorageDao<Picture> overflowStorage;
 
-    // 这里定时任务不应该这么设计
-    // 或许就不应该用队列？
-    @Scheduled(cron = "0/60 * * * * ?")
-    public void startConsumer() throws Exception {
-        Picture picture = reviewQueue.take();
+    // 每隔5秒尝试进行一次审核
+    @Scheduled(cron = "0/5 * * * * ?")
+    public void startConsumer() {
+        Picture picture = overflowStorage.loadOne();
         if (picture == null) {
             return;
         }
@@ -128,13 +123,14 @@ public class PictureReviewManager {
                         log.info("图片违规原因列表 {}", illegal.getReasons());
                         log.info("图片违规详细原因 {}", JSONObject.toJSONString(illegal.getResult()));
                         updateWrapper.set(Picture::getReviewStatus, ReviewStatus.REJECT.getValue());
-                        updateWrapper.set(Picture::getReviewMessage,  "AI自动审核不通过, " +illegal.getReason());
+                        updateWrapper.set(Picture::getReviewMessage, "AI自动审核不通过, " + illegal.getReason());
                     } else {
                         log.info("图片没有违规 {}", illegal.getReason());
                         updateWrapper.set(Picture::getReviewStatus, ReviewStatus.PASS.getValue());
                         updateWrapper.set(Picture::getReviewMessage, "AI自动审核通过, " + illegal.getReason());
                     }
                 }
+                overflowStorage.delete(Collections.singletonList(picture));
                 // 立即删除缓存
                 List<Long> ids = Collections.singletonList(picture.getId());
                 // 更新数据库和缓存

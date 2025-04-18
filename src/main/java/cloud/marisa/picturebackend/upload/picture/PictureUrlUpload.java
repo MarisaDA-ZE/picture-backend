@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
+import java.nio.file.InvalidPathException;
 import java.nio.file.Path;
 
 /**
@@ -69,7 +70,7 @@ public class PictureUrlUpload extends PictureUploadTemplate {
     }
 
     @Override
-    protected String getFileName(Object inputSource) {
+    public String getFileName(Object inputSource) {
         String fileURL = (String) inputSource;
         try (HttpResponse response = HttpUtil.createRequest(Method.HEAD, fileURL).execute()) {
             log.info("请求状态：{}", response.isOk());
@@ -121,9 +122,19 @@ public class PictureUrlUpload extends PictureUploadTemplate {
             Path fileName = path.getFileName();
             log.info("文件名：{}", fileName);
             return fileName.toString();
+        } catch (InvalidPathException ex) {
+            log.info("无法解析的URL地址: ", ex);
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "无法解析的URL地址");
         } catch (Exception e) {
             log.error("获取文件名失败: ", e);
-            return null;
+            // https://vigen-invi.oss-cn-shanghai.aliyuncs.com/service_dashscope/ImageOutPainting/
+            // 2025-04-18/public/8d4fea61-d86d-4ffa-9b47-59819f8c03d2/
+            // result-cb015854-c637-47d3-99ff-ae9547dc8ec1.jpg
+            // ?OSSAccessKeyId=LTAI5t7aiMEUzu1F2xPMCdFj&Expires=1744986184&Signature=cBKYt0pgQvqxh%2FDtnPW0BG%2B378M%3D
+            // https://xxx/yyy/zzz.jpg
+            String trimParams = url.contains("?") ? url.substring(0, url.indexOf("?")) : url;
+            // zzz.jpg
+            return trimParams.substring(trimParams.lastIndexOf("/") + 1);
         }
     }
 }

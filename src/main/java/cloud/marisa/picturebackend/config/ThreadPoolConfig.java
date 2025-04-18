@@ -15,6 +15,9 @@ import java.util.concurrent.TimeUnit;
 @Configuration
 public class ThreadPoolConfig {
 
+    /**
+     * 这个线程池用于处理批量图片编辑的异步任务
+     */
     @Bean("editBatchPoolExecutor")
     public ThreadPoolExecutor editBatchPoolExecutor() {
         return new ThreadPoolExecutor(
@@ -41,5 +44,22 @@ public class ThreadPoolConfig {
                 TimeUnit.SECONDS,
                 new ArrayBlockingQueue<>(16),
                 new ThreadPoolExecutor.AbortPolicy());
+    }
+
+
+    /**
+     * 这个线程池用于异步处理图片上传任务
+     * <p>主要是获取图片相关信息，并更新到数据库</p>
+     */
+    @Bean("pictureUploadPoolExecutor")
+    public ThreadPoolExecutor pictureUploadPoolExecutor() {
+        return new ThreadPoolExecutor(
+                4,
+                16,
+                60,
+                TimeUnit.SECONDS,
+                new ArrayBlockingQueue<>(16),
+                new ThreadPoolExecutor.AbortPolicy()
+        );
     }
 }

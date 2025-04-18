@@ -4,6 +4,8 @@ import cloud.marisa.picturebackend.api.picgreen.ImageModerationApi;
 import cloud.marisa.picturebackend.api.picgreen.MrsPictureIllegal;
 import cloud.marisa.picturebackend.config.aliyun.green.MrsImageModeration;
 import cloud.marisa.picturebackend.api.image.AliyunOssUtil;
+import cloud.marisa.picturebackend.entity.dto.file.UploadPictureResult;
+import cloud.marisa.picturebackend.manager.upload.PictureUploadManager;
 import com.alibaba.fastjson2.JSONObject;
 import com.aliyun.oss.model.PutObjectResult;
 import lombok.extern.log4j.Log4j2;
@@ -29,6 +31,9 @@ public class AliyunServerTests {
     @Autowired
     private ImageModerationApi imageModerationApi;
 
+    @Autowired
+    private PictureUploadManager pictureUploadManager;
+
     @Test
     public void ossTest() throws Exception {
         // 文件上传
@@ -44,6 +49,20 @@ public class AliyunServerTests {
         // 文件下载
         String output = "C:\\Users\\Marisa\\Desktop\\test-r18\\output.png";
         downloadFile(fileName, output);
+    }
+
+    @Test
+    public void ossPictureUploadTest() throws Exception {
+        // 文件上传（同步模式）
+        // ≈1MB 耗时 1491ms
+        // ≈10MB 耗时 4885ms
+        String path = "C:\\Users\\Marisa\\Desktop\\thems\\126638656_p0.png";
+        String uploadPath = "picture/test/";
+        String fileName = "marisa2.jpg";
+        long start = System.currentTimeMillis();
+        UploadPictureResult result = pictureUploadManager.uploadPictureInputStream(fileName, uploadPath, new FileInputStream(path));
+        log.info("上传对象信息 {}", result);
+        log.info("业务耗时 {}ms", (System.currentTimeMillis() - start));
     }
 
     @Test

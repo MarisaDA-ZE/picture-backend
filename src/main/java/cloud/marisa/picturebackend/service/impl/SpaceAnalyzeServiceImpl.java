@@ -8,6 +8,7 @@ import cloud.marisa.picturebackend.entity.dto.analyze.request.base.SpaceAnalyzeR
 import cloud.marisa.picturebackend.entity.dto.analyze.response.*;
 import cloud.marisa.picturebackend.enums.MrsTimeDimension;
 import cloud.marisa.picturebackend.enums.MrsUserRole;
+import cloud.marisa.picturebackend.enums.ReviewStatus;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.exception.ThrowUtils;
@@ -26,9 +27,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.stereotype.Service;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 
 /**
@@ -73,7 +72,7 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
             queryWrapper.select(Picture::getPicSize);
             // 是否 只查公共空间
             if (analyzeRequest.isQueryPublic()) {
-                queryWrapper.isNull(Picture::getSpaceId);
+                queryWrapper.eq(Picture::getSpaceId, 0L);
             }
             // 所有的图片大小
             List<Object> selectObjs = pictureService.getBaseMapper().selectObjs(queryWrapper);
@@ -93,7 +92,7 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
         }
         // 用户空间的使用统计
         Long spaceId = analyzeRequest.getSpaceId();
-        ThrowUtils.throwIf(spaceId == null || spaceId <= 0, ErrorCode.PARAMS_ERROR);
+        ThrowUtils.throwIf(spaceId == null || spaceId < 0, ErrorCode.PARAMS_ERROR);
         Space dbSpace = spaceService.getById(spaceId);
         ThrowUtils.throwIf(dbSpace == null, ErrorCode.NOT_FOUND);
         // 统计私人空间使用情况
@@ -132,6 +131,29 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
     }
 
     @Override
+    public List<String> getPublicHotCategories(int maxCount) {
+        SpaceCategoryAnalyzeRequest analyzeRequest = new SpaceCategoryAnalyzeRequest();
+        analyzeRequest.setQueryPublic(true);
+        // 查询图片分类统计
+        Map<String, Long> categories = pictureMapper.getSpaceCategoryAnalyze(analyzeRequest)
+                .stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(
+                        SpaceCategoryAnalyzeResponse::getCategory,
+                        SpaceCategoryAnalyzeResponse::getCount,
+                        (oldCount, newCount) -> newCount // 处理重复键，但没有重复
+                ));
+        log.info("categories: {}", categories);
+        // 从Map转换为List，并排序
+        List<String> collect = categories.entrySet().stream()
+                .sorted((e1, e2) -> Long.compare(e2.getValue(), e1.getValue()))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+        // 只取前n条
+        return collect.subList(0, Math.min(collect.size(), maxCount));
+    }
+
+    @Override
     public List<SpaceTagAnalyzeResponse> getSpaceTagAnalyze(
             SpaceTagAnalyzeRequest analyzeRequest,
             User loginUser) {
@@ -158,6 +180,31 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
                 .sorted((e1, e2) -> Long.compare(e2.getValue(), e1.getValue()))
                 .map(tag -> new SpaceTagAnalyzeResponse(tag.getKey(), tag.getValue()))
                 .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<String> getPublicHotTags(int maxCount) {
+        // 基础参数校验
+        LambdaQueryWrapper<Picture> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(Picture::getSpaceId, 0L);
+        queryWrapper.eq(Picture::getReviewStatus, ReviewStatus.PASS.getValue());
+        queryWrapper.select(Picture::getTags);
+        // 查询图片标签统计,并转换为Map（tag -> count）
+        Map<String, Long> tags = pictureService.getBaseMapper()
+                .selectObjs(queryWrapper)
+                .stream()
+                .filter(ObjUtil::isNotNull)
+                .map(Object::toString)
+                .flatMap(json -> JSONUtil.toList(json, String.class).stream())
+                .collect(Collectors.groupingBy(tag -> tag, Collectors.counting()));
+        log.info("tags: {}", tags);
+        // 从Map转换为List，并排序
+        List<String> collect = tags.entrySet().stream()
+                .sorted((e1, e2) -> Long.compare(e2.getValue(), e1.getValue()))
+                .map(Map.Entry::getKey)
+                .collect(Collectors.toList());
+        // 只取前十条
+        return collect.subList(0, Math.min(collect.size(), maxCount));
     }
 
     @Override
@@ -279,7 +326,7 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         // 仅分析个人空间，校验空间ID信息
-        if ((!queryPublic && !queryAll) && (spaceId == null || spaceId <= 0)) {
+        if ((!queryPublic && !queryAll) && (spaceId == null || spaceId < 0)) {
             throw new BusinessException(ErrorCode.PARAMS_ERROR);
         }
         // Space dbSpace = spaceService.getById(spaceId);
@@ -303,7 +350,7 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
         }
         // 只查公共空间（空间ID列为空的就是公共空间图片）
         if (analyzeRequest.isQueryPublic()) {
-            queryWrapper.isNull(Picture::getSpaceId);
+            queryWrapper.eq(Picture::getSpaceId, 0L);
             return;
         }
         // 查私有空间

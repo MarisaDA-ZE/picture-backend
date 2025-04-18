@@ -1,10 +1,17 @@
 package cloud.marisa.picturebackend.util;
 
+import cloud.marisa.picturebackend.entity.dto.file.UploadPictureResult;
+import cloud.marisa.picturebackend.exception.BusinessException;
+import cloud.marisa.picturebackend.exception.ErrorCode;
+import cloud.marisa.picturebackend.upload.picture.CountingInputStream;
+import cn.hutool.core.util.NumberUtil;
 import lombok.Data;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.ToString;
+import lombok.extern.log4j.Log4j2;
 import net.coobird.thumbnailator.Thumbnails;
+import net.coobird.thumbnailator.tasks.UnsupportedFormatException;
 import org.apache.commons.compress.utils.IOUtils;
 
 import javax.imageio.ImageIO;
@@ -26,6 +33,7 @@ import java.util.stream.Collectors;
  * @description 图片工具类
  * @date 2025/4/3
  */
+@Log4j2
 public class ImageUtil {
     /**
      * 默认压缩的图片格式
@@ -65,8 +73,12 @@ public class ImageUtil {
             suffix = suffix.startsWith(".") ? suffix.substring(1) : suffix;
             builder.outputFormat(suffix);
         }
-        builder.toOutputStream(outputStream);
-
+        try {
+            builder.toOutputStream(outputStream);
+        } catch (Exception e) {
+            log.error("压缩图片时出错", e);
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "解析图片时出错");
+        }
         return new ByteArrayInputStream(outputStream.toByteArray());
     }
 
@@ -170,6 +182,67 @@ public class ImageUtil {
             // 返回格式名（如 "jpeg" -> "jpg"）
             return reader.getFormatName().toLowerCase();
         }
+    }
+
+    /**
+     * 获取图片信息
+     *
+     * @param is 输入流
+     */
+    public static String getPictureType(InputStream is) {
+        // 获取图片的长宽比等信息
+        try (CountingInputStream cis = new CountingInputStream(is)) {
+            // 读取前 8 个字节用于检测文件类型
+            cis.mark(8);
+            byte[] header = new byte[8];
+            int bytesRead = cis.read(header);
+            cis.reset(); // 重置流供后续读取
+            // 从字节数组中获取图片类型
+            return MrsStreamUtil.determineFileType(header, bytesRead);
+        } catch (IOException e) {
+            log.error("文件读取失败: ", e);
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "文件读取失败");
+        }
+    }
+
+
+    /**
+     * 获取图片信息
+     *
+     * @param is 输入流
+     */
+    public static UploadPictureResult getPictureInfo(InputStream is) {
+        UploadPictureResult result = new UploadPictureResult();
+        // 获取图片的长宽比等信息
+        try (CountingInputStream cis = new CountingInputStream(is)) {
+            // 读取前 8 个字节用于检测文件类型
+            cis.mark(8);
+            byte[] header = new byte[8];
+            int bytesRead = cis.read(header);
+            cis.reset(); // 重置流供后续读取
+            // 从字节数组中获取图片类型
+            String pictureType = MrsStreamUtil.determineFileType(header, bytesRead);
+            BufferedImage bufferedImage = ImageIO.read(cis);
+            if (bufferedImage == null) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件读取失败");
+            }
+            // 获取图像大小（-8是前面指针重置有点问题，导致文件大小会少1B）
+            // 但又不影响正常使用
+            long picSize = cis.getSize() - 8;
+            int width = bufferedImage.getWidth();
+            int height = bufferedImage.getHeight();
+            double scale = NumberUtil.round(width * 1.0 / height, 2).doubleValue();
+            result.setPicWidth(width);
+            result.setPicHeight(height);
+            result.setPicScale(scale);
+            result.setPicSize(picSize);
+            result.setPicFormat(pictureType);
+            log.info("图片信息: {}", result);
+        } catch (IOException e) {
+            log.error("文件读取失败: ", e);
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "文件读取失败");
+        }
+        return result;
     }
 
 
@@ -345,9 +418,17 @@ public class ImageUtil {
             count++;
         }
 
-        public float avgH() { return sumH / count; }
-        public float avgS() { return sumS / count; }
-        public float avgL() { return sumL / count; }
+        public float avgH() {
+            return sumH / count;
+        }
+
+        public float avgS() {
+            return sumS / count;
+        }
+
+        public float avgL() {
+            return sumL / count;
+        }
     }
 
 

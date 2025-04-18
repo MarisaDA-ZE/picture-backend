@@ -10,7 +10,15 @@ import org.springframework.stereotype.Component;
 import java.io.InputStream;
 import java.net.URL;
 import java.util.Date;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
+
+import com.aliyun.oss.ClientException;
+import com.aliyun.oss.OSS;
+import com.aliyun.oss.common.auth.*;
+import com.aliyun.oss.OSSClientBuilder;
+import com.aliyun.oss.OSSException;
 
 /**
  * @author MarisaDAZE
@@ -187,4 +195,32 @@ public class AliyunOssUtil {
     public void removeBucket(String bucketName) {
         ossClient.deleteBucket(bucketName);
     }
+
+
+    public void getPermanentAddress(String bucketName, String fileName) {
+        try {
+            // 以下示例用于资源拥有者（即UID为174649585760xxxx的Bucket Owner）通过Bucket Policy授权指定用户（UID为20214760404935xxxx的RAM用户）拥有列举examplebucket下所有文件的权限。
+            String policyText = "{\"Statement\": [{\"Effect\": \"Allow\", \"Action\": [\"oss:GetObject\", \"oss:ListObjects\"], \"Principal\": [\"20214760404935xxxx\"], \"Resource\": [\"acs:oss:*:174649585760xxxx:examplebucket/*\"]}], \"Version\": \"1\"}";
+
+            // 设置Bucket Policy。
+            ossClient.setBucketPolicy(bucketName, policyText);
+        } catch (OSSException oe) {
+            System.out.println("Caught an OSSException, which means your request made it to OSS, "
+                    + "but was rejected with an error response for some reason.");
+            System.out.println("Error Message:" + oe.getErrorMessage());
+            System.out.println("Error Code:" + oe.getErrorCode());
+            System.out.println("Request ID:" + oe.getRequestId());
+            System.out.println("Host ID:" + oe.getHostId());
+        } catch (ClientException ce) {
+            System.out.println("Caught an ClientException, which means the client encountered "
+                    + "a serious internal problem while trying to communicate with OSS, "
+                    + "such as not being able to access the network.");
+            System.out.println("Error Message:" + ce.getMessage());
+        } finally {
+            if (ossClient != null) {
+                ossClient.shutdown();
+            }
+        }
+    }
+
 }

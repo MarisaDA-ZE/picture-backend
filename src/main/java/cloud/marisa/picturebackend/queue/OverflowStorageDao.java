@@ -8,6 +8,8 @@ public interface OverflowStorageDao<T> {
 
     List<T> load();
 
+    T loadOne();
+
     void delete(List<T> tasks);
 }
 
