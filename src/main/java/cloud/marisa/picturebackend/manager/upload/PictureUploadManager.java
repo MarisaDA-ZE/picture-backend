@@ -76,8 +76,6 @@ public class PictureUploadManager {
         String bucketName = properties.getBucketName();
         String compressSuffix = pictureConfig.getCompressImageType();
         UploadPictureResult result = new UploadPictureResult();
-
-
         try {
             Path tempFile = null;
             try {
@@ -130,9 +128,9 @@ public class PictureUploadManager {
                     result.setPicColor(rgbColor);
                 }
                 result.setPicName(fileName);
-                // 图片指纹（但是不用算，因为在调用前就算过了）
-                // String hex = MD5.create().digestHex(Files.newInputStream(tempFile));
-                // result.setMd5(hex);
+                // 图片指纹
+                String hex = MD5.create().digestHex(Files.newInputStream(tempFile));
+                result.setMd5(hex);
                 // 主颜色的hsv分量
                 MrsColorHSV colorHSV = ColorUtils.toHSV(rgbColor);
                 result.setMColorHue(colorHSV.getHue());

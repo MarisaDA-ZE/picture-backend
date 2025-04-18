@@ -162,6 +162,7 @@ public class SpaceAnalyzeServiceImpl implements ISpaceAnalyzeService {
         LambdaQueryWrapper<Picture> queryWrapper = new LambdaQueryWrapper<>();
         // 构造查询条件
         fillLambdaQueryWrapper(analyzeRequest, queryWrapper);
+        queryWrapper.eq(Picture::getReviewStatus, ReviewStatus.PASS.getValue());
         queryWrapper.select(Picture::getTags);
         // 查询图片标签统计,并转换为Map（tag -> count）
         Map<String, Long> collect = pictureService.getBaseMapper()

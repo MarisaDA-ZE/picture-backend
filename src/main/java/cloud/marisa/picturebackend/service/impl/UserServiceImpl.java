@@ -97,6 +97,8 @@ public class UserServiceImpl extends ServiceImpl<UserMapper, User>
         user.setUserName("用户_" + MrsRandomUtil.getRandomString(6));
         user.setUserPassword(encoded);
         user.setUserRole(MrsUserRole.USER.getValue());
+        String avatar = "https://mrs-picture-backend.oss-cn-chengdu.aliyuncs.com/avatar/default-avatar.jpg";
+        user.setUserAvatar(avatar);
         // 保存用户
         int insert = baseMapper.insert(user);
         if (insert <= 0) {

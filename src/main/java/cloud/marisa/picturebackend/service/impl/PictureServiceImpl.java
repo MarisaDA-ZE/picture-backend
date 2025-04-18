@@ -378,12 +378,6 @@ public class PictureServiceImpl
                     throw new BusinessException(ErrorCode.OPERATION_ERROR, "更新空间失败");
                 }
             }
-            // 啥都完成了，如果不是管理员上传图片，就将内容推给AI审核
-            // 这里推到Redis，在AI审核服务那里进行取ID和图片进行处理
-            if (Objects.equals(picture.getReviewStatus(), ReviewStatus.PENDING.getValue())) {
-                log.info("非管理员上传，保存图片数据到Redis");
-                storage.save(picture);
-            }
             return null;
         });
         return PictureVo.toVO(picture);
@@ -539,6 +533,13 @@ public class PictureServiceImpl
         MrsCacheUtil.delayRemoveCache(PICTURE_LOCAL_CACHE, redisTemplate, cacheKeys, 3);
         if (!updated) {
             throw new BusinessException(ErrorCode.OPERATION_ERROR);
+        }
+        // 啥都完成了，如果不是管理员上传图片，就将内容推给AI审核
+        // 这里推到Redis，在AI审核服务那里进行取ID和图片进行处理
+        Integer pending = ReviewStatus.PENDING.getValue();
+        if (picture.getReviewStatus().equals(pending)) {
+            log.info("非管理员上传，保存图片数据到Redis");
+            storage.save(this.getById(picture));
         }
         return picture.getId();
     }
