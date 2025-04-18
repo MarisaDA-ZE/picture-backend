@@ -14,8 +14,8 @@ import java.util.List;
 public enum MrsAliyunGreenLabels implements MrsBaseEnum<String> {
     PORNOGRAPHIC_ADULT_CONTENT("pornographic_adultContent", "疑似含有成人色情内容", 70F),
     PORNOGRAPHIC_ADULT_CONTENT_TII("pornographic_adultContent_tii", "图中文字疑似含有色情内容", 70F),
-    SEXUAL_SUGGESTIVE_CONTENT("sexual_suggestiveContent", "疑似含有疑似低俗或性暗示内容", 98F),
-    SEXUAL_PARTIAL_NUDITY("sexual_partialNudity", "疑似含有包含肢体裸露或性感内容", 98F),
+    SEXUAL_SUGGESTIVE_CONTENT("sexual_suggestiveContent", "疑似含有疑似低俗或性暗示内容", 80F),
+    SEXUAL_PARTIAL_NUDITY("sexual_partialNudity", "疑似含有包含肢体裸露或性感内容", 96F),
     // 铁拳，惹不起
     POLITICAL_POLITICAL_FIGURE("political_politicalFigure", "疑似含有政治人物的内容", 60F),
     POLITICAL_POLITICAL_FIGURE_NAME_TII("political_politicalFigure_name_tii", "图中文字疑似含有领导人姓名", 60F),
@@ -90,6 +90,8 @@ public enum MrsAliyunGreenLabels implements MrsBaseEnum<String> {
                 PORNOGRAPHIC_ADULT_CONTENT,
                 // ↓ 图中文字疑似含有色情内容
                 PORNOGRAPHIC_ADULT_CONTENT_TII,
+                // ↓ 疑似含有疑似低俗或性暗示内容
+                SEXUAL_SUGGESTIVE_CONTENT,
                 // ↓ 疑似含有政治人物的内容
                 POLITICAL_POLITICAL_FIGURE,
                 // ↓ 图中文字疑似含有领导人姓名
