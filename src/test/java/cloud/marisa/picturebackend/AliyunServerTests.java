@@ -5,15 +5,22 @@ import cloud.marisa.picturebackend.api.picgreen.MrsPictureIllegal;
 import cloud.marisa.picturebackend.config.aliyun.green.MrsImageModeration;
 import cloud.marisa.picturebackend.api.image.AliyunOssUtil;
 import cloud.marisa.picturebackend.entity.dto.file.UploadPictureResult;
+import cloud.marisa.picturebackend.manager.upload.AliyunPictureUploadMultipart;
+import cloud.marisa.picturebackend.manager.upload.AliyunPictureUploadURL;
 import cloud.marisa.picturebackend.manager.upload.PictureUploadManager;
+import cloud.marisa.picturebackend.util.MrsPathUtil;
 import com.alibaba.fastjson2.JSONObject;
 import com.aliyun.oss.model.PutObjectResult;
 import lombok.extern.log4j.Log4j2;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.io.*;
+
+import static cloud.marisa.picturebackend.common.Constants.MIME_TYPE_MAP;
 
 
 /**
@@ -64,6 +71,47 @@ public class AliyunServerTests {
         log.info("上传对象信息 {}", result);
         log.info("业务耗时 {}ms", (System.currentTimeMillis() - start));
     }
+
+    @Autowired
+    private AliyunPictureUploadURL aliyunPictureUploadURL;
+
+    @Autowired
+    private AliyunPictureUploadMultipart aliyunPictureUploadMultipart;
+
+    /***
+     * 图片异步上传测试
+     */
+    @Test
+    public void pictureUrlUploadAsync() {
+        String url = "https://img2.huashi6.com/images/resource/fhinnuuhv-rra1gtz8jaecgm-dgs.jpg?imageView2/3/q/90/interlace/1/w/1200/h/1200";
+        String savePath = "picture/test";
+        long current = System.currentTimeMillis();
+        UploadPictureResult result = aliyunPictureUploadURL.uploadPicture(url, savePath);
+        log.info("上传对象信息 {}", result);
+        log.info("业务耗时 {}ms", (System.currentTimeMillis() - current));
+    }
+
+    /***
+     * 图片异步上传测试
+     */
+    @Test
+    public void pictureMultipartUploadAsync() throws Exception {
+        File file = new File("C:\\Users\\Marisa\\Desktop\\thems\\126638656_p0.png");
+        String savePath = "picture/test";
+        try (InputStream is = new FileInputStream(file)) {
+            String fileName = file.getName();
+            byte[] bytes = is.readAllBytes();
+            String mime = MIME_TYPE_MAP.get(MrsPathUtil.trimSuffix(fileName));
+            log.info("文件名: {}, MIME: {}", fileName, mime);
+            MultipartFile multipartFile = new MockMultipartFile("file", fileName, mime, bytes);
+            long current = System.currentTimeMillis();
+            UploadPictureResult result = aliyunPictureUploadMultipart.uploadPicture(multipartFile, savePath);
+            log.info("上传对象信息 {}", result);
+            log.info("业务耗时 {}ms", (System.currentTimeMillis() - current));
+        }
+
+    }
+
 
     @Test
     public void aiGreenTest() throws Exception {

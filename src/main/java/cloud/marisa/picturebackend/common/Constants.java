@@ -1,6 +1,8 @@
 package cloud.marisa.picturebackend.common;
 
 
+import java.util.Map;
+
 /**
  * @author MarisaDAZE
  * @description Constants.类
@@ -42,4 +44,17 @@ public class Constants {
      * 空间服务的缓存前缀
      */
     public static final String SPACE_CACHE_NAME = "space:";
+
+    public static final Map<String, String> MIME_TYPE_MAP = Map.of(
+            "jpg", "image/jpeg",
+            "jpeg", "image/jpeg",
+            "png", "image/png",
+            "gif", "image/gif",
+            "bmp", "image/bmp",
+            "webp", "image/webp",
+            "svg", "image/svg+xml",
+            "ico", "image/x-icon",
+            "tif", "image/tiff",
+            "tiff", "image/tiff"
+    );
 }

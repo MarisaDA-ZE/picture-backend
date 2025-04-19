@@ -101,12 +101,12 @@ public class DatabaseOverflowStorage implements OverflowStorageDao<Picture> {
         // 实际应根据状态查询未处理任务
         Object json = redisTemplate.opsForValue().get(ID_LIST_KEY);
         // id列表的json为空，说明没有任务处理
-        log.info("ID列表的JSON {}", json);
         if (ObjUtil.isNull(json) || !JSONUtil.isTypeJSONArray((String) json)) {
             return null;
         }
         // id列表为空，说明没有任务处理
         List<String> collect = JSONUtil.toList((String) json, String.class);
+        log.info("ID_LIST_KEY {}", collect);
         if (collect == null || collect.isEmpty()) {
             return null;
         }

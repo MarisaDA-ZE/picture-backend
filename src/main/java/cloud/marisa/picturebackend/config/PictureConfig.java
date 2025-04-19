@@ -26,12 +26,17 @@ public class PictureConfig {
     private String imageMaxSize;
 
     /**
+     * 图片大小超过多少会进行压缩
+     */
+    private String compressMaxSize;
+
+    /**
      * 图片压缩率[0-1], 1表示不压缩
      */
     private Float compressRate;
 
     /**
-     * 压缩后图片的类型
+     * 压缩后图片的类型（.jpg、.webp、...）
      */
     private String compressImageType;
 
@@ -47,6 +52,10 @@ public class PictureConfig {
 
     public void setImageMaxSize(String imageMaxSize) {
         this.imageMaxSize = imageMaxSize;
+    }
+
+    public void setCompressMaxSize(String compressMaxSize) {
+        this.compressMaxSize = compressMaxSize;
     }
 
     public void setCompressRate(Float compressRate) {

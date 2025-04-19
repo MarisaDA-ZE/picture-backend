@@ -123,6 +123,16 @@ public class AliyunOssUtil {
     }
 
     /**
+     * 获取文件的信息
+     *
+     * @param request 要查询的参数
+     * @return 查到的结果
+     */
+    public OSSObject getObject(GetObjectRequest request) {
+        return ossClient.getObject(request);
+    }
+
+    /**
      * 生成文件下载链接
      *
      * @param bucketName 存储桶名（mrs-example）

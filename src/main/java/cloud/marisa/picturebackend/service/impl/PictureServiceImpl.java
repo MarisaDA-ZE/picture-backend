@@ -19,6 +19,8 @@ import cloud.marisa.picturebackend.exception.ThrowUtils;
 import cloud.marisa.picturebackend.manager.auth.SpaceUserAuthManager;
 import cloud.marisa.picturebackend.manager.auth.StpKit;
 import cloud.marisa.picturebackend.manager.auth.constant.SpaceUserPermissionConstants;
+import cloud.marisa.picturebackend.manager.upload.AliyunPictureUploadMultipart;
+import cloud.marisa.picturebackend.manager.upload.AliyunPictureUploadURL;
 import cloud.marisa.picturebackend.manager.upload.PictureUploadManager;
 import cloud.marisa.picturebackend.mapper.PictureMapper;
 import cloud.marisa.picturebackend.queue.OverflowStorageDao;
@@ -47,6 +49,7 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.BeanUtils;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -115,6 +118,13 @@ public class PictureServiceImpl
     private final TransactionTemplate transactionTemplate;
 
     /**
+     * 是否上传到自建文件存储服务器
+     * <p>true-上传到MinIO；false-上传到阿里云</p>
+     */
+    @Value("${mrs.file.picture.is-use-oss:false}")
+    private Boolean useOss;
+
+    /**
      * 图片上传服务（通过URL上传）
      */
     private final PictureUrlUpload pictureUrlUpload;
@@ -125,17 +135,14 @@ public class PictureServiceImpl
     private final PictureMultipartFileUpload pictureMultipartFileUpload;
 
     /**
-     * 是否上传到自建文件存储服务器
-     * <p>true-上传到MinIO；false-上传到阿里云</p>
+     * OSS图片上传服务（通过URL上传）
      */
-    @Value("${mrs.file.picture.is-use-oss:false}")
-    private Boolean useOss;
+    private final AliyunPictureUploadURL aliyunPictureUploadURL;
 
     /**
-     * 图片上传服务（通过文件流上传到OSS服务器）
+     * OSS图片上传服务（通过文件上传）
      */
-    private final PictureUploadManager ossPictureUploadManager;
-
+    private final AliyunPictureUploadMultipart aliyunPictureUploadMultipart;
     /**
      * 动态线程池
      */
@@ -272,12 +279,7 @@ public class PictureServiceImpl
                 // 保存图片到文件服务器
                 UploadPictureResult uploadResult;
                 if (useOss != null && useOss) {
-                    String fileName = pictureMultipartFileUpload.getFileName(inputSource);
-                    InputStream is = pictureMultipartFileUpload.getPictureStream(inputSource);
-                    log.info("上传文件名：{}", fileName);
-                    log.info("上传路径：{}", uploadPath);
-                    uploadResult = ossPictureUploadManager
-                            .uploadPictureInputStream(fileName, uploadPath, is);
+                    uploadResult = aliyunPictureUploadMultipart.uploadPicture(inputSource, uploadPath);
                 } else {
                     uploadResult = pictureMultipartFileUpload.uploadPictureObject(inputSource, uploadPath);
                 }
@@ -299,12 +301,7 @@ public class PictureServiceImpl
             // 此外还要兼容一些随机图的API，所以也没法把URL字符串直接MD5做标识
             UploadPictureResult uploadResult;
             if (useOss != null && useOss) {
-                String fileName = pictureUrlUpload.getFileName(inputSource);
-                InputStream is = pictureUrlUpload.getPictureStream(inputSource);
-                log.info("上传文件名：{}", fileName);
-                log.info("上传路径：{}", uploadPath);
-                uploadResult = ossPictureUploadManager
-                        .uploadPictureInputStream(fileName, uploadPath, is);
+                uploadResult = aliyunPictureUploadURL.uploadPicture(inputSource, uploadPath);
             } else {
                 uploadResult = pictureUrlUpload.uploadPictureObject(inputSource, uploadPath);
             }

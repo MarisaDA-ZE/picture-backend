@@ -20,6 +20,7 @@ import javax.imageio.stream.ImageInputStream;
 import java.awt.image.BufferedImage;
 import java.io.*;
 import java.awt.*;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -167,24 +168,6 @@ public class ImageUtil {
     }
 
     /**
-     * 获取图片的原始格式（如 "jpg", "png", "webp"）
-     */
-    public static String getImageFormat(InputStream inputStream) throws IOException {
-        // 将输入流转换为可重复读取的字节数组
-        byte[] imageData = inputStream.readAllBytes();
-        try (ImageInputStream iis = ImageIO.createImageInputStream(new ByteArrayInputStream(imageData))) {
-            Iterator<ImageReader> readers = ImageIO.getImageReaders(iis);
-            if (!readers.hasNext()) {
-                throw new IOException("Unsupported image format");
-            }
-            ImageReader reader = readers.next();
-            reader.setInput(iis);
-            // 返回格式名（如 "jpeg" -> "jpg"）
-            return reader.getFormatName().toLowerCase();
-        }
-    }
-
-    /**
      * 获取图片信息
      *
      * @param is 输入流
@@ -203,6 +186,195 @@ public class ImageUtil {
             log.error("文件读取失败: ", e);
             throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "文件读取失败");
         }
+    }
+
+    // -------------获取文件格式------------------
+    public static String getImageTypePlus(InputStream is) {
+        try (is) {
+            byte[] header = new byte[16];
+            int bytesRead = is.read(header);
+            if (bytesRead < 2) {
+                throw new BusinessException(ErrorCode.PARAMS_ERROR, "文件头过短");
+            }
+            return determineImageType(header, bytesRead);
+        } catch (IOException e) {
+            throw new BusinessException(ErrorCode.INTERNAL_SERVER_ERROR, "文件读取失败");
+        }
+    }
+
+    private static String determineImageType(byte[] header, int bytesRead) {
+        // 按检测速度排序：高频格式在前
+        if (isJPEG(header)) return "jpeg";
+        if (isPNG(header, bytesRead)) return "png";
+        if (isGIF(header, bytesRead)) return "gif";
+        if (isBMP(header)) return "bmp";
+        if (isWebP(header, bytesRead)) return "webp";
+        if (isTIFF(header)) return "tiff";
+        if (isICO(header)) return "ico";
+        if (isPSD(header)) return "psd";
+        if (isHEIC(header, bytesRead)) return "heic";
+        if (isAVIF(header, bytesRead)) return "avif";
+
+        throw new BusinessException(ErrorCode.PARAMS_ERROR, "不支持的图片格式");
+    }
+
+    // 以下是各格式的检测方法（16进制值用字节直接比较）
+    private static boolean isJPEG(byte[] header) {
+        return (header[0] & 0xFF) == 0xFF &&
+                (header[1] & 0xFF) == 0xD8;
+    }
+
+    private static boolean isPNG(byte[] header, int bytesRead) {
+        return bytesRead >= 8 &&
+                header[0] == (byte) 0x89 &&
+                header[1] == 0x50 &&  // P
+                header[2] == 0x4E &&  // N
+                header[3] == 0x47 &&  // G
+                header[4] == 0x0D &&
+                header[5] == 0x0A &&
+                header[6] == 0x1A &&
+                header[7] == 0x0A;
+    }
+
+    private static boolean isGIF(byte[] header, int bytesRead) {
+        return bytesRead >= 6 &&
+                header[0] == 0x47 &&  // G
+                header[1] == 0x49 &&  // I
+                header[2] == 0x46 &&  // F
+                header[3] == 0x38 &&  // 8
+                (header[4] == 0x37 || header[4] == 0x39) && // 7/9
+                header[5] == 0x61;    // a
+    }
+
+    private static boolean isBMP(byte[] header) {
+        return header[0] == 0x42 &&  // B
+                header[1] == 0x4D;    // M
+    }
+
+    private static boolean isWebP(byte[] header, int bytesRead) {
+        return bytesRead >= 12 &&
+                header[0] == 0x52 &&  // R
+                header[1] == 0x49 &&  // I
+                header[2] == 0x46 &&  // F
+                header[3] == 0x46 &&  // F
+                header[8] == 0x57 &&  // W
+                header[9] == 0x45 &&  // E
+                header[10] == 0x42 && // B
+                header[11] == 0x50;  // P
+    }
+
+    private static boolean isTIFF(byte[] header) {
+        return (header[0] == 0x49 && header[1] == 0x49 &&
+                header[2] == 0x2A && header[3] == 0x00) ||  // II*
+                (header[0] == 0x4D && header[1] == 0x4D &&
+                        header[2] == 0x00 && header[3] == 0x2A);    // MM*
+    }
+
+    private static boolean isICO(byte[] header) {
+        return header[0] == 0x00 &&
+                header[1] == 0x00 &&
+                header[2] == 0x01 &&
+                header[3] == 0x00;
+    }
+
+    private static boolean isPSD(byte[] header) {
+        return header[0] == 0x38 &&  // 8
+                header[1] == 0x42 &&  // B
+                header[2] == 0x50 &&  // P
+                header[3] == 0x53;    // S
+    }
+
+    private static boolean isHEIC(byte[] header, int bytesRead) {
+        return bytesRead >= 12 &&
+                header[4] == 0x66 &&  // f
+                header[5] == 0x74 &&  // t
+                header[6] == 0x79 &&  // y
+                header[7] == 0x70 &&  // p
+                new String(header, 8, 4, StandardCharsets.US_ASCII)
+                        .matches("heic|heix|hevc|hevx");
+    }
+
+    private static boolean isAVIF(byte[] header, int bytesRead) {
+        return bytesRead >= 12 &&
+                header[4] == 0x66 &&  // f
+                header[5] == 0x74 &&  // t
+                header[6] == 0x79 &&  // y
+                header[7] == 0x70 &&  // p
+                new String(header, 8, 4, StandardCharsets.US_ASCII)
+                        .matches("avif|mif1");
+    }
+    // -------------获取文件格式------------------
+
+    /**
+     * 获取图片信息
+     *
+     * @param is 输入流
+     * @return 图片格式（jpg、png、bmp...）
+     */
+    public static String getImageFormat(InputStream is) {
+        // 获取图片格式
+        try (is) {
+            byte[] header = new byte[8];
+            int bytesRead = is.read(header);
+            // 从字节数组中获取图片类型
+            return determineFileType(header, bytesRead);
+        } catch (IOException e) {
+            log.error("文件读取失败: ", e);
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "文件读取失败");
+        }
+    }
+
+
+    /**
+     * 根据文件头字节判断常见图片类型
+     */
+    public static String determineFileType(byte[] header, int bytesRead) {
+        if (bytesRead < 2) return null;
+        // 检查 BMP（"BM"）
+        if (matchBytes(header, new byte[]{0x42, 0x4D})) { // "BM" 的十六进制
+            return "bmp";
+        }
+        // 检查 JPEG（FF D8 FF）
+        if (bytesRead >= 3
+                && (header[0] & 0xFF) == 0xFF
+                && (header[1] & 0xFF) == 0xD8
+                && (header[2] & 0xFF) == 0xFF) {
+            return "jpg";
+        }
+        // 检查 PNG（89 50 4E 47 0D 0A 1A 0A）
+        if (bytesRead >= 8
+                && header[0] == (byte) 0x89
+                && header[1] == 0x50
+                && header[2] == 0x4E
+                && header[3] == 0x47
+                && header[4] == 0x0D
+                && header[5] == 0x0A
+                && header[6] == 0x1A
+                && header[7] == 0x0A) {
+            return "png";
+        }
+        // 检查 GIF（"GIF87a" 或 "GIF89a"）
+        if (bytesRead >= 6
+                && header[0] == 'G'
+                && header[1] == 'I'
+                && header[2] == 'F'
+                && header[3] == '8'
+                && (header[4] == '7' || header[4] == '9')
+                && header[5] == 'a') {
+            return "gif";
+        }
+        return null;
+    }
+
+    /**
+     * 检查字节数组是否匹配指定模式
+     */
+    private static boolean matchBytes(byte[] actual, byte[] expected) {
+        if (actual.length < expected.length) return false;
+        for (int i = 0; i < expected.length; i++) {
+            if (actual[i] != expected[i]) return false;
+        }
+        return true;
     }
 
 

@@ -13,12 +13,10 @@ public class MrsStreamUtil {
      */
     public static String determineFileType(byte[] header, int bytesRead) {
         if (bytesRead < 2) return "unknown";
-
         // 检查 BMP（"BM"）
         if (matchBytes(header, new byte[]{0x42, 0x4D})) { // "BM" 的十六进制
             return "bmp";
         }
-
         // 检查 JPEG（FF D8 FF）
         if (bytesRead >= 3
                 && (header[0] & 0xFF) == 0xFF
@@ -26,7 +24,6 @@ public class MrsStreamUtil {
                 && (header[2] & 0xFF) == 0xFF) {
             return "jpg";
         }
-
         // 检查 PNG（89 50 4E 47 0D 0A 1A 0A）
         if (bytesRead >= 8
                 && header[0] == (byte) 0x89
@@ -39,7 +36,6 @@ public class MrsStreamUtil {
                 && header[7] == 0x0A) {
             return "png";
         }
-
         // 检查 GIF（"GIF87a" 或 "GIF89a"）
         if (bytesRead >= 6
                 && header[0] == 'G'
@@ -50,7 +46,6 @@ public class MrsStreamUtil {
                 && header[5] == 'a') {
             return "gif";
         }
-
         return "unknown";
     }
 
