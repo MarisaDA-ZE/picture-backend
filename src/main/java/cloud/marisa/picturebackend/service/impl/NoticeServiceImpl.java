@@ -14,7 +14,8 @@ import cloud.marisa.picturebackend.mapper.NoticeMapper;
 import cloud.marisa.picturebackend.service.INoticeService;
 import cloud.marisa.picturebackend.service.IUserService;
 import cloud.marisa.picturebackend.util.EnumUtil;
-import cloud.marisa.picturebackend.util.SseEmitterUtil;
+import cloud.marisa.picturebackend.websocket.interceptor.notice.MrsNotificationHandler;
+import cn.hutool.json.JSONUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -23,10 +24,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
-import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
-
-import java.util.Collections;
-import java.util.Map;
 
 
 /**
@@ -48,24 +45,14 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
     /**
      * SSE工具类
      */
-    private final SseEmitterUtil sseUtil;
-
-    @Override
-    public SseEmitter subscribe(Long userId) {
-        SseEmitter subscribe = sseUtil.subscribe(userId);
-        // 检查是否有堆积的消息
-        sseUtil.checkReSend(userId);
-        return subscribe;
-    }
-
-    @Override
-    public void closeSse(Long uid) {
-        sseUtil.closeSse(uid);
-    }
+    private final MrsNotificationHandler notificationHandler;
 
     @Override
     public void pushMessage(Long uid, Notice notice) {
-        sseUtil.pushMessage(uid, notice);
+        log.info("notice：{}", notice);
+        String json = JSONUtil.toJsonStr(notice);
+        log.info("WS推送消息：{}", json);
+        notificationHandler.sendMessage(uid, json);
     }
 
     @Override
@@ -123,8 +110,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
             updateWrapper.eq(Notice::getNoticeType, noticeType.getValue());
         }
         boolean updated = this.update(updateWrapper);
-        // 同步移除掉redis中的重试信息
-        sseUtil.readListByType(noticeType, loginUser.getId());
+        log.info("批量已读消息：{}", updated);
         return updated;
     }
 
@@ -152,8 +138,7 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
                 .set(Notice::getIsRead, isRead.getValue());
         boolean updated = this.update(updateWrapper);
         ThrowUtils.throwIf(!updated, ErrorCode.OPERATION_ERROR, "消息状态更新失败");
-        // 同步更新redis中的重试列表
-        sseUtil.readListIfRetry(Collections.singletonList(notice.getId()), loginUser.getId());
+        // 已读一条消息
     }
 
     private LambdaQueryWrapper<Notice> getQueryWrapper(NoticeQueryRequest queryRequest) {

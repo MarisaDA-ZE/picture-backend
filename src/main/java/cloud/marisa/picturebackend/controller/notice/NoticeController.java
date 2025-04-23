@@ -46,21 +46,6 @@ public class NoticeController {
     private final INoticeService noticeService;
 
     /**
-     * 建立SSE连接
-     *
-     * @param servletRequest HttpServlet请求对象
-     * @return 一个SSE连接
-     */
-    @AuthCheck(mustRole = MrsUserRole.USER)
-    @GetMapping(path = "/subscribe")
-    public SseEmitter subscribe(
-            HttpServletRequest servletRequest) {
-        log.info("notice==>尝试建立SSE连接");
-        User loginUser = userService.getLoginUser(servletRequest);
-        return noticeService.subscribe(loginUser.getId());
-    }
-
-    /**
      * 分页获取消息列表
      *
      * @param queryRequest   查询参数的DTO封装
@@ -167,17 +152,6 @@ public class NoticeController {
     }
 
     /**
-     * 确认一条消息前端已收到
-     *
-     * @param noticeId 消息ID
-     */
-    @AuthCheck(mustRole = MrsUserRole.USER)
-    @GetMapping(path = "/ack/{noticeId}")
-    public void noticeAck(@PathVariable Long noticeId) {
-        log.info("notice==>前端确认收到 {}", noticeId);
-    }
-
-    /**
      * 测试推送消息
      *
      * @param userId  用户ID
@@ -188,9 +162,12 @@ public class NoticeController {
     public void pushTest(
             @PathVariable Long userId,
             String message) {
+        log.info("message {}", message);
         log.info("notice==>尝试推送消息给用户 {}", userId);
         Notice notice = new Notice();
-        notice.setNoticeType(0);
+        notice.setId(1001L);
+        notice.setIsRead(0);    // 未读
+        notice.setNoticeType(0);    // 系统消息
         notice.setContent(message);
         notice.setCreateTime(new Date());
         // noticeService.save(notice);

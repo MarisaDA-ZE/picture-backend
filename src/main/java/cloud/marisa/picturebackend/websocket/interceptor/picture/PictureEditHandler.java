@@ -1,4 +1,4 @@
-package cloud.marisa.picturebackend.websocket.interceptor;
+package cloud.marisa.picturebackend.websocket.interceptor.picture;
 
 import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.entity.vo.UserVo;

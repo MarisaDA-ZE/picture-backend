@@ -19,20 +19,6 @@ import java.util.Map;
  */
 public interface INoticeService extends IService<Notice> {
 
-    /**
-     * 与指定用户建立连接
-     *
-     * @param userId 用户ID
-     * @return SSE事件对象
-     */
-    SseEmitter subscribe(Long userId);
-
-    /**
-     * 与指定用户断开连接
-     *
-     * @param userId 用户ID
-     */
-    void closeSse(Long userId);
 
     /***
      * 向指定用户推送消息
