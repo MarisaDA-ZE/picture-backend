@@ -24,7 +24,6 @@ import cloud.marisa.picturebackend.manager.auth.StpKit;
 import cloud.marisa.picturebackend.manager.auth.constant.SpaceUserPermissionConstants;
 import cloud.marisa.picturebackend.manager.upload.AliyunPictureUploadMultipart;
 import cloud.marisa.picturebackend.manager.upload.AliyunPictureUploadURL;
-import cloud.marisa.picturebackend.manager.upload.PictureUploadManager;
 import cloud.marisa.picturebackend.mapper.PictureMapper;
 import cloud.marisa.picturebackend.queue.OverflowStorageDao;
 import cloud.marisa.picturebackend.service.INoticeService;
@@ -53,7 +52,6 @@ import com.github.benmanes.caffeine.cache.Caffeine;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.log4j.Log4j2;
 import org.springframework.beans.BeanUtils;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -1286,7 +1284,7 @@ public class PictureServiceImpl
         Long spaceId = picture.getSpaceId();
         Long puid = picture.getUserId();
         Long uuid = loginUser.getId();
-        // TODO: 这里设计的不对，要根据权限系统重构，但现在可以满足基础功能
+        // TODO: 这里总感觉怪怪的，但它可以满足基础功能
         if (spaceId == null) {
             // 公共空间，仅本人和系统管理员可以操作
             boolean isAdmin = userService.hasPermission(loginUser, MrsUserRole.ADMIN);

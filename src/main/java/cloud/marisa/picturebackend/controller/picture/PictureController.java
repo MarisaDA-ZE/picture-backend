@@ -259,7 +259,6 @@ public class PictureController {
         if (spaceId == null) {
             // 公共空间
             queryRequest.setNullSpaceId(true);
-            queryRequest.setReviewStatus(ReviewStatus.PASS.getValue());
         } else {
             // 私有空间
             queryRequest.setNullSpaceId(false);
@@ -274,6 +273,8 @@ public class PictureController {
             boolean canView = StpKit.SPACE.hasPermission(SpaceUserPermissionConstants.PICTURE_VIEW);
             ThrowUtils.throwIf(!canView, ErrorCode.AUTHORIZATION_ERROR);
         }
+        // 防止用户传色图，公共空间和私有空间如果是普通用户，则只能看过审后的图片
+        queryRequest.setReviewStatus(ReviewStatus.PASS.getValue());
         Page<Picture> picturePage = pictureService.getPicturePage(queryRequest);
         Page<PictureVo> voPage = pictureService.getPictureVoPage(picturePage, httpServletRequest);
         return MrsResult.ok(voPage);
