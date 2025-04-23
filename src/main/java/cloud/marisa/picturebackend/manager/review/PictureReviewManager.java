@@ -1,13 +1,17 @@
 package cloud.marisa.picturebackend.manager.review;
 
-import cloud.marisa.picturebackend.api.image.AliyunOssUtil;
 import cloud.marisa.picturebackend.api.picgreen.ImageModerationApi;
 import cloud.marisa.picturebackend.api.picgreen.MrsPictureIllegal;
 import cloud.marisa.picturebackend.config.aliyun.green.MrsImageModeration;
+import cloud.marisa.picturebackend.entity.dao.Notice;
 import cloud.marisa.picturebackend.entity.dao.Picture;
 import cloud.marisa.picturebackend.enums.ReviewStatus;
+import cloud.marisa.picturebackend.enums.notice.MrsNoticeRead;
+import cloud.marisa.picturebackend.enums.notice.MrsNoticeType;
 import cloud.marisa.picturebackend.queue.OverflowStorageDao;
+import cloud.marisa.picturebackend.service.INoticeService;
 import cloud.marisa.picturebackend.service.IPictureService;
+import cn.hutool.json.JSONUtil;
 import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import lombok.extern.log4j.Log4j2;
@@ -16,8 +20,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.Resource;
-import java.util.Collections;
-import java.util.List;
+import java.text.SimpleDateFormat;
+import java.util.*;
 import java.util.concurrent.ThreadPoolExecutor;
 
 /**
@@ -43,10 +47,10 @@ public class PictureReviewManager {
     private IPictureService pictureService;
 
     /**
-     * 阿里云对象存储OSS
+     * 消息通知服务
      */
     @Resource
-    private AliyunOssUtil ossUtil;
+    private INoticeService noticeService;
 
 
     /**
@@ -85,9 +89,6 @@ public class PictureReviewManager {
      */
     public void aiAutoReview(Picture picture) throws Exception {
         String url = picture.getUrl();
-        // 获取图片的URL，一小时过期
-        // String savedPath = picture.getSavedPath();
-        // String url = ossUtil.generatePresignedUrl(savedPath, 3600);
         log.info("imageURL {}", url);
         String taskId = imageModerationApi.resolveResponse(imageModerationApi.createTask(url));
         log.info("创建的任务ID {}", taskId);
@@ -106,13 +107,15 @@ public class PictureReviewManager {
                 MrsPictureIllegal illegal = imageModerationApi.isIllegal(result);
                 boolean legal = illegal.isLegal();
                 log.info("图片是否合规 {}", legal);
-
                 LambdaUpdateWrapper<Picture> updateWrapper = new LambdaUpdateWrapper<>();
                 updateWrapper.eq(Picture::getId, picture.getId());
+                // 审核状态和消息
+                String reviewMessage;
+                ReviewStatus reviewStatus;
                 // 粗审通过
                 if (legal) {
-                    updateWrapper.set(Picture::getReviewStatus, ReviewStatus.PASS.getValue());
-                    updateWrapper.set(Picture::getReviewMessage, "AI自动审核通过, " + illegal.getReason());
+                    reviewStatus = ReviewStatus.PASS;
+                    reviewMessage = "AI自动审核通过, " + illegal.getReason();
                 } else {
                     // 粗审不通过，看是不是属于违规图
                     boolean hasRisk = imageModerationApi.isAllowedRisk(illegal);
@@ -122,14 +125,16 @@ public class PictureReviewManager {
                         log.info("图片违规原因 {}", illegal.getReason());
                         log.info("图片违规原因列表 {}", illegal.getReasons());
                         log.info("图片违规详细原因 {}", JSONObject.toJSONString(illegal.getResult()));
-                        updateWrapper.set(Picture::getReviewStatus, ReviewStatus.REJECT.getValue());
-                        updateWrapper.set(Picture::getReviewMessage, "AI自动审核不通过, " + illegal.getReason());
+                        reviewStatus = ReviewStatus.REJECT;
+                        reviewMessage = "AI自动审核不通过, 因为存在：" + illegal.getReason();
                     } else {
                         log.info("图片没有违规 {}", illegal.getReason());
-                        updateWrapper.set(Picture::getReviewStatus, ReviewStatus.PASS.getValue());
-                        updateWrapper.set(Picture::getReviewMessage, "AI自动审核通过, " + illegal.getReason());
+                        reviewStatus = ReviewStatus.PASS;
+                        reviewMessage = "AI自动审核通过, 但存在" + illegal.getReason() + "的敏感元素";
                     }
                 }
+                updateWrapper.set(Picture::getReviewStatus, reviewStatus.getValue());
+                updateWrapper.set(Picture::getReviewMessage, reviewMessage);
                 overflowStorage.delete(Collections.singletonList(picture));
                 // 立即删除缓存
                 List<Long> ids = Collections.singletonList(picture.getId());
@@ -137,9 +142,41 @@ public class PictureReviewManager {
                 pictureService.removeCacheByKeys(ids);
                 pictureService.update(updateWrapper);
                 pictureService.delayRemoveCacheByKeys(ids);
+                pushMessage(picture, reviewMessage);
                 break;
             }
             log.error("获取审核结果超时 {}", result);
         } while (count < maxCount);
+    }
+
+
+    private void pushMessage(Picture picture, String reviewMessage) {
+        // 消息对象
+        Notice notice = new Notice();
+        notice.setNoticeType(MrsNoticeType.SYSTEM.getValue());
+        notice.setSenderId(0L); // 系统发送时候 senderId 为0
+        notice.setUserId(picture.getUserId());
+        notice.setIsRead(MrsNoticeRead.UNREAD.getValue());
+        // 构建消息内容
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy年MM月dd日HH时mm分");
+        Date getEditTime = picture.getEditTime();
+        Date createTime = picture.getCreateTime();
+        Date uploadTime = getEditTime == null ? createTime : getEditTime;
+        String uploadTimeStr = sdf.format(uploadTime);
+        Long spaceId = picture.getSpaceId();
+        String spaceName = (spaceId == 0L) ? "公共图库" : "空间 " + spaceId + " ";
+        String msg = String.format("尊敬的用户您好，您在%s向%s上传的图片%s，经%s，点击查看详情。",
+                uploadTimeStr,
+                spaceName,
+                picture.getName(),
+                reviewMessage
+        );
+        notice.setContent(msg);
+        Map<String, Object> params = new HashMap<>();
+        params.put("pictureId", String.valueOf(picture.getId()));
+        notice.setAdditionalParams(JSONUtil.toJsonStr(params));
+        notice.setCreateTime(new Date());
+        noticeService.save(notice);
+        noticeService.pushMessage(picture.getUserId(), notice);
     }
 }

@@ -4,6 +4,7 @@ import cloud.marisa.picturebackend.api.image.imageexpand.ImageOutPaintingApi;
 import cloud.marisa.picturebackend.api.image.imageexpand.entity.request.ImagePaintingParameters;
 import cloud.marisa.picturebackend.api.image.imageexpand.entity.request.ImageRequestParam;
 import cloud.marisa.picturebackend.api.image.imageexpand.entity.response.create.CreateTaskResponse;
+import cloud.marisa.picturebackend.entity.dao.Notice;
 import cloud.marisa.picturebackend.entity.dao.Picture;
 import cloud.marisa.picturebackend.entity.dao.Space;
 import cloud.marisa.picturebackend.entity.dao.User;
@@ -13,6 +14,8 @@ import cloud.marisa.picturebackend.entity.dto.picture.*;
 import cloud.marisa.picturebackend.entity.vo.PictureVo;
 import cloud.marisa.picturebackend.entity.vo.UserVo;
 import cloud.marisa.picturebackend.enums.*;
+import cloud.marisa.picturebackend.enums.notice.MrsNoticeRead;
+import cloud.marisa.picturebackend.enums.notice.MrsNoticeType;
 import cloud.marisa.picturebackend.exception.BusinessException;
 import cloud.marisa.picturebackend.exception.ErrorCode;
 import cloud.marisa.picturebackend.exception.ThrowUtils;
@@ -24,6 +27,7 @@ import cloud.marisa.picturebackend.manager.upload.AliyunPictureUploadURL;
 import cloud.marisa.picturebackend.manager.upload.PictureUploadManager;
 import cloud.marisa.picturebackend.mapper.PictureMapper;
 import cloud.marisa.picturebackend.queue.OverflowStorageDao;
+import cloud.marisa.picturebackend.service.INoticeService;
 import cloud.marisa.picturebackend.service.IPictureService;
 import cloud.marisa.picturebackend.service.ISpaceService;
 import cloud.marisa.picturebackend.service.IUserService;
@@ -60,6 +64,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.InputStream;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -111,6 +116,11 @@ public class PictureServiceImpl
      * 图片空间服务
      */
     private final ISpaceService spaceService;
+
+    /**
+     * 通知服务
+     */
+    private final INoticeService noticeService;
 
     /**
      * 区域事务模板
@@ -1028,6 +1038,9 @@ public class PictureServiceImpl
         Long spaceId = picture.getSpaceId();
         if (spaceId == null) spaceId = 0L;
         User loggedUser = userService.getLoginUserIfLogin(servletRequest);
+        // 校验审核状态
+        pictureReviewShow(picture, loggedUser);
+
         log.info("spaceId: {}", spaceId);
         // 是私人空间或团队空间，校验是否有相应权限
         if (!spaceId.equals(0L)) {
@@ -1051,12 +1064,45 @@ public class PictureServiceImpl
             List<String> permissions = Collections.singletonList(SpaceUserPermissionConstants.PICTURE_VIEW);
             if (loggedUser != null) {
                 permissions = spaceUserAuthManager.getPermissionList(space, loggedUser);
+                // 公共空间
+                if(spaceId.equals(0L)){
+                    boolean isAdmin = userService.hasPermission(loggedUser, MrsUserRole.ADMIN);
+                    boolean isSelf = userId.equals(loggedUser.getId());
+                    if(isAdmin || isSelf){
+                        permissions = spaceUserAuthManager.getPermissionsByRole(
+                                MrsSpaceRole.ADMIN.getValue()
+                        );
+                    }
+                }
             }
             vo.setPermissionList(permissions);
             vo.setUser(userVo);
         }
         log.info("pictureVo: {}", vo);
         return vo;
+    }
+
+    /**
+     * 检查图片是否审核通过
+     * <p>如果是审核中或审核未通过，则除本人或管理员外其他人无权访问</p>
+     *
+     * @param picture    图片对象
+     * @param loggedUser 当前登录用户
+     */
+    public void pictureReviewShow(Picture picture, User loggedUser) {
+        // 校验审核状态
+        ReviewStatus reviewStatus = EnumUtil.fromValue(picture.getReviewStatus(), ReviewStatus.class);
+        if (reviewStatus == null) {
+            throw new BusinessException(ErrorCode.PARAMS_ERROR, "图片审核状态异常");
+        }
+        // 如果在 审核中 或 未通过，则只有本人或管理员有权查看
+        if (reviewStatus == ReviewStatus.PENDING || reviewStatus == ReviewStatus.REJECT) {
+            boolean isSelf = loggedUser.getId().equals(picture.getUserId());
+            boolean isAdmin = userService.hasPermission(loggedUser, MrsUserRole.ADMIN);
+            if (!isSelf && !isAdmin) {
+                throw new BusinessException(ErrorCode.AUTHORIZATION_ERROR, "您无权查看此图片");
+            }
+        }
     }
 
     @Override
@@ -1159,10 +1205,50 @@ public class PictureServiceImpl
         picture.setReviewStatus(reviewStatus.getValue());
         picture.setReviewMessage(reviewRequest.getReviewMessage());
         picture.setReviewTime(new Date());
+        Long pictureId = picture.getId();
+        // 删除缓存
+        String cacheKey = PICTURE_CACHE_NAME + PICTURE_ID + pictureId;
+        List<String> cacheKeys = Collections.singletonList(cacheKey);
+        MrsCacheUtil.removeCache(PICTURE_LOCAL_CACHE, redisTemplate, cacheKeys);
+        // 更新图片
         boolean updated = this.updateById(picture);
+        // 通过线程池异步延迟删除缓存
+        MrsCacheUtil.delayRemoveCache(PICTURE_LOCAL_CACHE, redisTemplate, cacheKeys, 3);
         if (!updated) {
-            throw new BusinessException(ErrorCode.OPERATION_ERROR);
+            throw new BusinessException(ErrorCode.OPERATION_ERROR, "数据库错误，图片更新失败");
         }
+        // 发消息
+        pushMessage(picture, loginUser, reviewRequest);
+    }
+
+    private void pushMessage(Picture picture, User reviewUser, PictureReviewRequest reviewRequest) {
+        // 消息对象
+        Notice notice = new Notice();
+        notice.setNoticeType(MrsNoticeType.SYSTEM.getValue());
+        notice.setUserId(picture.getUserId());  // 接收方ID
+        notice.setSenderId(reviewUser.getId()); // 审核员ID
+        notice.setIsRead(MrsNoticeRead.UNREAD.getValue());
+        // 构建消息内容
+        SimpleDateFormat sdf = new SimpleDateFormat("yyyy年MM月dd日HH时mm分");
+        Date getEditTime = picture.getEditTime();
+        Date createTime = picture.getCreateTime();
+        Date uploadTime = getEditTime == null ? createTime : getEditTime;
+        String uploadTimeStr = sdf.format(uploadTime);
+        Long spaceId = picture.getSpaceId();
+        String spaceName = (spaceId == 0L) ? "公共图库" : "空间 " + spaceId + " ";
+        String msg = String.format("尊敬的用户您好，您在%s向%s上传的图片%s，经%s，点击查看详情。",
+                uploadTimeStr,
+                spaceName,
+                picture.getName(),
+                reviewRequest.getReviewMessage()
+        );
+        notice.setContent(msg);
+        Map<String, Object> params = new HashMap<>();
+        params.put("pictureId", String.valueOf(picture.getId()));
+        notice.setAdditionalParams(JSONUtil.toJsonStr(params));
+        notice.setCreateTime(new Date());
+        noticeService.save(notice);
+        noticeService.pushMessage(picture.getUserId(), notice);
     }
 
     @Override

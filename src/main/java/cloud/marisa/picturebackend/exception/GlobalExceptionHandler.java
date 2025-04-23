@@ -4,10 +4,13 @@ import cloud.marisa.picturebackend.common.MrsResult;
 import cn.dev33.satoken.exception.NotLoginException;
 import cn.dev33.satoken.exception.NotPermissionException;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.validation.BindingResult;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.context.request.async.AsyncRequestTimeoutException;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -101,5 +104,13 @@ public class GlobalExceptionHandler {
                     res.put("value", val);
                     return res;
                 }).collect(Collectors.toList());
+    }
+
+    @ExceptionHandler(AsyncRequestTimeoutException.class)
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void handleAsyncTimeout(AsyncRequestTimeoutException ex) {
+        // 静默处理SSE超时异常
+        // log.error("SSE超时了 {}", ex.getMessage());
+        // ex.printStackTrace();
     }
 }

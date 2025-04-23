@@ -98,7 +98,7 @@ CREATE TABLE IF NOT EXISTS space (
     INDEX `idx_space_level`(`space_level` ASC) USING BTREE COMMENT '空间等级索引'
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '空间表' ROW_FORMAT = Dynamic;
 
--- 空间用户关联表 --
+-- 团队空间表 --
 CREATE TABLE IF NOT EXISTS space_user (
     `id` bigint NOT NULL COMMENT '主键ID',
     `space_id` bigint NOT NULL COMMENT '空间ID',
@@ -111,6 +111,25 @@ CREATE TABLE IF NOT EXISTS space_user (
     INDEX `idx_space_id`(`space_id` ASC) USING BTREE COMMENT '空间ID的索引',
     INDEX `idx_user_id`(`user_id` ASC) USING BTREE COMMENT '用户ID的索引'
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '空间-用户的关联表' ROW_FORMAT = Dynamic;
+
+-- 用户消息表，用于记录用户接收到的各类消息 --
+CREATE TABLE IF NOT EXISTS notice (
+    `id` bigint NOT NULL COMMENT '主键ID',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `notice_type` tinyint NOT NULL DEFAULT 0 COMMENT '消息类型（0-系统消息；1-用户消息）',
+    `is_read` tinyint NOT NULL DEFAULT 0 COMMENT '是否已读（0-未读；1-已读）',
+    `content` varchar(512) CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_ai_ci NOT NULL COMMENT '消息内容',
+    `sender_id` bigint NOT NULL DEFAULT 0 COMMENT '发送方ID（0-系统；<ID>-用户）',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `is_delete` tinyint NOT NULL DEFAULT 0 COMMENT '是否被删除（0-未删除；1-已删除）',
+    PRIMARY KEY (`id`) USING BTREE,
+    INDEX `idx_user_id`(`user_id` ASC) USING BTREE COMMENT '接收用户ID普通索引',
+    INDEX `idx_sender_id`(`sender_id` ASC) USING BTREE COMMENT '发送用户ID普通索引',
+    INDEX `udx_user_id_is_read`(`user_id` ASC, `is_read` ASC) USING BTREE COMMENT '用户ID和阅读状态的联合索引',
+    INDEX `udx_userid_notice_type`(`user_id` ASC, `notice_type` ASC) USING BTREE COMMENT '用户ID和消息类型的联合索引'
+) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '-- 用户消息表，用于记录用户接收到的各类消息 --' ROW_FORMAT = Dynamic;
+
 
 
 

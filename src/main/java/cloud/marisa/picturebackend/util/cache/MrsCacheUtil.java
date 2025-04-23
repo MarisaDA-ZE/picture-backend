@@ -5,11 +5,8 @@ import lombok.extern.log4j.Log4j2;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Component;
 
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.*;
-import java.util.stream.Collectors;
 
 /**
  * @author MarisaDAZE
@@ -58,6 +55,12 @@ public class MrsCacheUtil {
                     success = removeCache(localCache, redisTemplate, keys);
                 } catch (InterruptedException e) {
                     log.error("首次延迟删除被中断", e);
+                    List<RT> rts = redisTemplate.opsForValue().multiGet(keys);
+                    // 此时说明已经删除了，不用重试
+                    if (rts == null || rts.isEmpty()) {
+                        log.info("原因: 缓存本就不存在, 不再执行重试...");
+                        return;
+                    }
                     Thread.currentThread().interrupt();
                 }
                 // 重试逻辑
@@ -78,6 +81,63 @@ public class MrsCacheUtil {
                     }
                 }
                 if (!success) {
+                    log.error("缓存删除失败，已达最大重试次数: {}", maxRetry);
+                }
+            } finally {
+                log.info("关于删除键 {} 的任务耗时: {}ms", keys, System.currentTimeMillis() - start);
+            }
+        });
+    }
+
+    /**
+     * 延迟删除缓存（支持重试）
+     *
+     * @param redisTemplate 缓存数据的RedisTemplate实例
+     * @param keys          待删除的缓存键
+     * @param maxRetry      最大重试次数
+     * @param <RT>          RedisTemplate的Value类型
+     */
+    public static <RT> void delayRemoveCache(
+            RedisTemplate<String, RT> redisTemplate,
+            List<String> keys, int maxRetry) {
+        cacheDeleteExecutor.submit(() -> {
+            log.info("开始延迟删除缓存: {}", keys);
+            long start = System.currentTimeMillis();
+            int retryCount = 0;
+            Long success = 0L;
+            try {
+                try {
+                    // 首次延迟删除
+                    Thread.sleep(1000);
+                    success = redisTemplate.delete(keys);
+                } catch (InterruptedException e) {
+                    log.error("首次延迟删除被失败", e);
+                    List<RT> rts = redisTemplate.opsForValue().multiGet(keys);
+                    // 此时说明已经删除了，不用重试
+                    if (rts == null || rts.isEmpty()) {
+                        log.info("原因: 缓存本就不存在, 不再执行重试...");
+                        return;
+                    }
+                    Thread.currentThread().interrupt();
+                }
+                // 重试逻辑
+                while ((success != null && success > 0) && retryCount < maxRetry) {
+                    try {
+                        Thread.sleep(5000); // 重试间隔
+                        success = redisTemplate.delete(keys);
+                        if (success != null && success > 0L) {
+                            log.info("缓存重试删除成功");
+                            break;
+                        }
+                        retryCount++;
+                        log.warn("缓存删除失败，已重试{}/{}次", retryCount, maxRetry);
+                    } catch (InterruptedException e) {
+                        log.error("重试过程中被中断", e);
+                        Thread.currentThread().interrupt();
+                        break;
+                    }
+                }
+                if (success == null || success == 0L) {
                     log.error("缓存删除失败，已达最大重试次数: {}", maxRetry);
                 }
             } finally {

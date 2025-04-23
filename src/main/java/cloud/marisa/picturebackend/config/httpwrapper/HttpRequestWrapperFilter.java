@@ -28,7 +28,7 @@ public class HttpRequestWrapperFilter implements Filter {
         if (request instanceof HttpServletRequest) {
             HttpServletRequest servletRequest = (HttpServletRequest) request;
             String contentType = servletRequest.getHeader(Header.CONTENT_TYPE.getValue());
-            log.info("contentType: {}", contentType);
+            // log.info("contentType: {}", contentType);
             if (ContentType.JSON.getValue().equals(contentType)) {
                 // 可以再细粒度一些，只有需要进行空间权限校验的接口才需要包一层
                 chain.doFilter(new RequestWrapper(servletRequest), response);

@@ -131,6 +131,21 @@ public class PictureVo implements Serializable {
     private Date editTime;
 
     /**
+     * 图片审核状态（0:待审核，1:已通过，2:已拒绝）
+     */
+    private Integer reviewStatus;
+
+    /**
+     * 图片审核信息
+     */
+    private String reviewMessage;
+
+    /**
+     * 审核员ID
+     */
+    private Long reviewerId;
+
+    /**
      * DAO转VO
      *
      * @param picture 图片dao

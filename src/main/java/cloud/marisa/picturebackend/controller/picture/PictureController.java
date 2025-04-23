@@ -111,6 +111,7 @@ public class PictureController {
             @RequestPart(name = "file") MultipartFile multipartFile,
             PictureUploadRequest pictureUploadRequest,
             HttpServletRequest httpServletRequest) {
+        log.info("前端算的MD5： {}", pictureUploadRequest.getMd5());
         User loginUser = userService.getLoginUser(httpServletRequest);
         PictureVo pictureVo = pictureService.saveOrUpdatePicture(multipartFile, pictureUploadRequest, loginUser);
         return MrsResult.ok(pictureVo);
