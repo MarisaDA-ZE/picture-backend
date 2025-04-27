@@ -150,6 +150,27 @@ public class AliyunOssUtil {
     }
 
     /**
+     * 生成文件下载链接
+     *
+     * @param bucketName 存储桶名（mrs-example）
+     * @param fileName   文件的全路径（/path/to/example.txt）
+     * @param expired    过期时间
+     * @param unit       时间单位
+     * @return 文件的URL地址
+     */
+    public String generatePresignedUrl2(String bucketName, String fileName, long expired, TimeUnit unit) {
+//        long millis = unit.toMillis(expired);
+//        log.info("原始过期时间 {}, 时间单位 {}, 最终过期毫秒值 {}", expired, unit, millis);
+//        Date expiration = new Date(new Date().getTime() + millis);
+//        GeneratePresignedUrlRequest request = new GeneratePresignedUrlRequest(bucketName, fileName);
+//        request.setExpiration(new Date(System.currentTimeMillis() + expired * 1000));
+//        // 添加Referer策略（需SDK支持）
+//        request.addUserMetadata("Referer", "https://pic.marisa.cloud");
+//        request.
+        return null;
+    }
+
+    /**
      * 列出一个存储桶中的所有文件
      * <p>默认存储桶为配置文件中指定的</p>
      *

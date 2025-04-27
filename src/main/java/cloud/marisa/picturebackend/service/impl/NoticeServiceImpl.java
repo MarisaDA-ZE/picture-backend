@@ -5,6 +5,7 @@ import cloud.marisa.picturebackend.entity.dao.Notice;
 import cloud.marisa.picturebackend.entity.dao.User;
 import cloud.marisa.picturebackend.entity.dto.notice.NoticeAddRequest;
 import cloud.marisa.picturebackend.entity.dto.notice.NoticeQueryRequest;
+import cloud.marisa.picturebackend.entity.vo.NoticeVo;
 import cloud.marisa.picturebackend.enums.notice.MrsNoticeRead;
 import cloud.marisa.picturebackend.enums.notice.MrsNoticeType;
 import cloud.marisa.picturebackend.exception.BusinessException;
@@ -16,6 +17,7 @@ import cloud.marisa.picturebackend.service.IUserService;
 import cloud.marisa.picturebackend.util.EnumUtil;
 import cloud.marisa.picturebackend.websocket.interceptor.notice.MrsNotificationHandler;
 import cn.hutool.json.JSONUtil;
+import com.alibaba.fastjson2.JSONObject;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
@@ -50,7 +52,8 @@ public class NoticeServiceImpl extends ServiceImpl<NoticeMapper, Notice>
     @Override
     public void pushMessage(Long uid, Notice notice) {
         log.info("notice：{}", notice);
-        String json = JSONUtil.toJsonStr(notice);
+        NoticeVo vo = NoticeVo.toVo(notice);
+        String json = JSONObject.toJSONString(vo);
         log.info("WS推送消息：{}", json);
         notificationHandler.sendMessage(uid, json);
     }

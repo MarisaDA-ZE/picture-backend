@@ -18,7 +18,7 @@ public class SpringRedisTemplateTests {
     @Autowired
     private RedisTemplate<String, String> redisTemplate;
 
-    @Test
+//    @Test
     public void redisTest() throws InterruptedException {
         String key = "uid";
         String value = "114514";

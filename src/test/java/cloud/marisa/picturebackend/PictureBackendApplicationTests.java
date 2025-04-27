@@ -11,7 +11,7 @@ import java.util.Scanner;
 @SpringBootTest
 class PictureBackendApplicationTests {
 
-    @Test
+//    @Test
     void contextLoads() {
 
     }

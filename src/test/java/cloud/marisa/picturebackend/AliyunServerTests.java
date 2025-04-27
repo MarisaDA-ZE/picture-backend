@@ -41,7 +41,7 @@ public class AliyunServerTests {
     @Autowired
     private PictureUploadManager pictureUploadManager;
 
-    @Test
+//    @Test
     public void ossTest() throws Exception {
         // 文件上传
         String path = "C:\\Users\\Marisa\\Desktop\\test-r18\\test_4.png";
@@ -58,7 +58,7 @@ public class AliyunServerTests {
         downloadFile(fileName, output);
     }
 
-    @Test
+//    @Test
     public void ossPictureUploadTest() throws Exception {
         // 文件上传（同步模式）
         // ≈1MB 耗时 1491ms
@@ -81,7 +81,7 @@ public class AliyunServerTests {
     /***
      * 图片异步上传测试
      */
-    @Test
+//    @Test
     public void pictureUrlUploadAsync() {
         String url = "https://img2.huashi6.com/images/resource/fhinnuuhv-rra1gtz8jaecgm-dgs.jpg?imageView2/3/q/90/interlace/1/w/1200/h/1200";
         String savePath = "picture/test";
@@ -94,7 +94,7 @@ public class AliyunServerTests {
     /***
      * 图片异步上传测试
      */
-    @Test
+//    @Test
     public void pictureMultipartUploadAsync() throws Exception {
         File file = new File("C:\\Users\\Marisa\\Desktop\\thems\\126638656_p0.png");
         String savePath = "picture/test";

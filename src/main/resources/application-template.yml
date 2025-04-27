@@ -1,170 +1,170 @@
-# 你需要准备一个 application.yml 配置文件
-# 以下内容都是 application.yml 中的内容，只是部分数据不方便上传
-# 你可以复制文件中的所有内容到一个新建的 application.yml 中
-# 或者直接将该文件重命名为 application.yml
-
-
-server:
-  port: 8100
-  servlet:
-    context-path: /api
-    session:
-      cookie:
-        max-age: 604800
-
-# spring 相关配置
-spring:
-  main:
-    allow-circular-references: true
-  servlet:
-    multipart:
-      # 单文件最大上传体积
-      max-file-size: 15MB
-      # 设置总上传的文件大小
-      max-request-size: 50MB
-  application:
-    name: picture-backend
-  # 分库分表
-  shardingsphere:
-    datasource:
-      names: picture_backend
-      picture_backend:
-        type: com.zaxxer.hikari.HikariDataSource
-        driver-class-name: com.mysql.cj.jdbc.Driver
-        url: jdbc:mysql://127.0.0.1:3306/picture_backend?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true
-        username: root
-        password: 123456
-    rules:
-      sharding:
-        tables:
-          picture:
-            # 使用动态分表
-            actual-data-nodes: picture_backend.picture
-            table-strategy:
-              standard:
-                sharding-column: spaceId
-                # 使用自定义分片算法
-                sharding-algorithm-name: picture_sharding_algorithm
-        sharding-algorithms:
-          picture_sharding_algorithm:
-            type: CLASS_BASED
-            props:
-              strategy: standard
-              # 自定义分片算法的实现类
-              algorithmClassName: cloud.marisa.picturebackend.sharding.PictureShardingAlgorithm
-    props:
-      sql-show: true
-  # 数据库配置
-  datasource:
-    driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://127.0.0.1:3306/picture_backend?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true
-    username: root
-    password: 123456
-  # redis 配置
-  redis:
-    host: 127.0.0.1
-    password: 123456
-    port: 6379
-    database: 0
-  session:
-    store-type: redis
-    # session过期时间 7天（60 * 60 * 24 * 7 = 604800s）
-    timeout: 604800
-
-# 日志配置
-logging:
-  config: classpath:log4j2.xml
-
-# 接口文档配置
-knife4j:
-  enable: true
-  openapi:
-    title: 雾雨云图库接口文档
-    description: "雾雨云图库接口文档"
-    email: admin@marisa.cloud
-    concat: MarisaDAZE
-    url: https://blog.marisa.cloud
-    version: v1.0
-    license: Apache 2.0
-    license-url: https://stackoverflow.com/
-    terms-of-service-url: https://stackoverflow.com/
-    group:
-      default:
-        group-name: DEFAULT
-        api-rule: package
-        api-rule-resources:
-          - cloud.marisa.picturebackend.controller
-
-mybatis-plus:
-  configuration:
-    map-underscore-to-camel-case: false
-    # 仅在开发环境开启日志
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
-  global-config:
-    db-config:
-      logic-delete-field: isDelete # 全局逻辑删除的实体字段名
-      logic-delete-value: 1 # 逻辑已删除值（默认为 1）
-      logic-not-delete-value: 0 # 逻辑未删除值（默认为 0）
-    enable-sql-runner: false
-
-# minio 配置
-minio:
-  url: https://example.com
-  access-key: minioadmin
-  secret-key: minioadmin
-  bucket-name: <your-bucket-name>
-  folders:
-    # 图片存储文件夹
-    pictures: picture
-
-# 个性化配置
-mrs:
-  # 图片批量下载时的地址，支持format格式
-  picture-bath-url: https://cn.bing.com/images/async?q=%s&mmasync=1
-  aliyun:
-    # 阿里云百炼AI开放平台
-    bailian-ai:
-      access-key-id: <access-key-id>
-      access-key-secret: <access-key-secret>
-    # 阿里云AI图片审核
-    green:
-      access-key-id: <access-key-id>
-      access-key-secret: <access-key-secret>
-      endpoint: green-cip.cn-shanghai.aliyuncs.com
-    # 阿里云对象存储OSS
-    oss:
-      access-key-id: <access-key-id>
-      access-key-secret: <access-key-secret>
-      bucket-name: <your-bucket-name>
-      endpoint: https://oss-cn-hangzhou.aliyuncs.com
-      region: cn-hangzhou
-      pictures-folder: picture/
-  color-search:
-    # 按颜色搜索的相似度，0 代表以前端为准，取值[0,1]
-    similarity: 0.8
-  # 文件相关配置
-  file:
-    picture:
-      # 是否使用阿里云OSS进行存储，默认为false，此时使用自建MInIO存储
-      is-use-oss: true
-      # 图片最大体积
-      image-max-size: 15MB
-      # 图片大小超过多少会进行压缩
-      compress-max-size: 1MB
-      # 图片压缩率[0-1], 1表示不压缩，不建议低于0.5
-      compress-rate: 0.8
-      # 图片压缩后的类型
-      #（png压不动、jpg不支持alpha通道，webp兼容性好还小）
-      compress-image-type: .webp
-      # 支持上传的图片格式
-      image-suffix:
-        - .jpg
-        - .png
-        - .jpeg
-        - .webp
-      # 支持上传的图片MIME类型
-      url-image-type:
-        - image/jpg
-        - image/png
-        - image/jpeg
-        - image/webp
+## 你需要准备一个 application.yml 配置文件
+## 以下内容都是 application.yml 中的内容，只是部分数据不方便上传
+## 你可以复制文件中的所有内容到一个新建的 application.yml 中
+## 或者直接将该文件重命名为 application.yml
+#
+#
+#server:
+#  port: 8100
+#  servlet:
+#    context-path: /api
+#    session:
+#      cookie:
+#        max-age: 604800
+#
+## spring 相关配置
+#spring:
+#  main:
+#    allow-circular-references: true
+#  servlet:
+#    multipart:
+#      # 单文件最大上传体积
+#      max-file-size: 15MB
+#      # 设置总上传的文件大小
+#      max-request-size: 50MB
+#  application:
+#    name: picture-backend
+#  # 分库分表
+#  shardingsphere:
+#    datasource:
+#      names: picture_backend
+#      picture_backend:
+#        type: com.zaxxer.hikari.HikariDataSource
+#        driver-class-name: com.mysql.cj.jdbc.Driver
+#        url: jdbc:mysql://127.0.0.1:3306/picture_backend?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true
+#        username: root
+#        password: 123456
+#    rules:
+#      sharding:
+#        tables:
+#          picture:
+#            # 使用动态分表
+#            actual-data-nodes: picture_backend.picture
+#            table-strategy:
+#              standard:
+#                sharding-column: spaceId
+#                # 使用自定义分片算法
+#                sharding-algorithm-name: picture_sharding_algorithm
+#        sharding-algorithms:
+#          picture_sharding_algorithm:
+#            type: CLASS_BASED
+#            props:
+#              strategy: standard
+#              # 自定义分片算法的实现类
+#              algorithmClassName: cloud.marisa.picturebackend.sharding.PictureShardingAlgorithm
+#    props:
+#      sql-show: true
+#  # 数据库配置
+#  datasource:
+#    driver-class-name: com.mysql.cj.jdbc.Driver
+#    url: jdbc:mysql://127.0.0.1:3306/picture_backend?useUnicode=true&characterEncoding=UTF-8&useSSL=false&allowPublicKeyRetrieval=true
+#    username: root
+#    password: 123456
+#  # redis 配置
+#  redis:
+#    host: 127.0.0.1
+#    password: 123456
+#    port: 6379
+#    database: 0
+#  session:
+#    store-type: redis
+#    # session过期时间 7天（60 * 60 * 24 * 7 = 604800s）
+#    timeout: 604800
+#
+## 日志配置
+#logging:
+#  config: classpath:log4j2.xml
+#
+## 接口文档配置
+#knife4j:
+#  enable: true
+#  openapi:
+#    title: 雾雨云图库接口文档
+#    description: "雾雨云图库接口文档"
+#    email: admin@marisa.cloud
+#    concat: MarisaDAZE
+#    url: https://blog.marisa.cloud
+#    version: v1.0
+#    license: Apache 2.0
+#    license-url: https://stackoverflow.com/
+#    terms-of-service-url: https://stackoverflow.com/
+#    group:
+#      default:
+#        group-name: DEFAULT
+#        api-rule: package
+#        api-rule-resources:
+#          - cloud.marisa.picturebackend.controller
+#
+#mybatis-plus:
+#  configuration:
+#    map-underscore-to-camel-case: false
+#    # 仅在开发环境开启日志
+#    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+#  global-config:
+#    db-config:
+#      logic-delete-field: isDelete # 全局逻辑删除的实体字段名
+#      logic-delete-value: 1 # 逻辑已删除值（默认为 1）
+#      logic-not-delete-value: 0 # 逻辑未删除值（默认为 0）
+#    enable-sql-runner: false
+#
+## minio 配置
+#minio:
+#  url: https://example.com
+#  access-key: minioadmin
+#  secret-key: minioadmin
+#  bucket-name: <your-bucket-name>
+#  folders:
+#    # 图片存储文件夹
+#    pictures: picture
+#
+## 个性化配置
+#mrs:
+#  # 图片批量下载时的地址，支持format格式
+#  picture-bath-url: https://cn.bing.com/images/async?q=%s&mmasync=1
+#  aliyun:
+#    # 阿里云百炼AI开放平台
+#    bailian-ai:
+#      access-key-id: <access-key-id>
+#      access-key-secret: <access-key-secret>
+#    # 阿里云AI图片审核
+#    green:
+#      access-key-id: <access-key-id>
+#      access-key-secret: <access-key-secret>
+#      endpoint: green-cip.cn-shanghai.aliyuncs.com
+#    # 阿里云对象存储OSS
+#    oss:
+#      access-key-id: <access-key-id>
+#      access-key-secret: <access-key-secret>
+#      bucket-name: <your-bucket-name>
+#      endpoint: https://oss-cn-hangzhou.aliyuncs.com
+#      region: cn-hangzhou
+#      pictures-folder: picture/
+#  color-search:
+#    # 按颜色搜索的相似度，0 代表以前端为准，取值[0,1]
+#    similarity: 0.8
+#  # 文件相关配置
+#  file:
+#    picture:
+#      # 是否使用阿里云OSS进行存储，默认为false，此时使用自建MInIO存储
+#      is-use-oss: true
+#      # 图片最大体积
+#      image-max-size: 15MB
+#      # 图片大小超过多少会进行压缩
+#      compress-max-size: 1MB
+#      # 图片压缩率[0-1], 1表示不压缩，不建议低于0.5
+#      compress-rate: 0.8
+#      # 图片压缩后的类型
+#      #（png压不动、jpg不支持alpha通道，webp兼容性好还小）
+#      compress-image-type: .webp
+#      # 支持上传的图片格式
+#      image-suffix:
+#        - .jpg
+#        - .png
+#        - .jpeg
+#        - .webp
+#      # 支持上传的图片MIME类型
+#      url-image-type:
+#        - image/jpg
+#        - image/png
+#        - image/jpeg
+#        - image/webp

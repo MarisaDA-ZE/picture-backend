@@ -1,8 +1,10 @@
 package cloud.marisa.picturebackend.manager.review;
 
+import cloud.marisa.picturebackend.api.image.AliyunOssUtil;
 import cloud.marisa.picturebackend.api.picgreen.ImageModerationApi;
 import cloud.marisa.picturebackend.api.picgreen.MrsPictureIllegal;
 import cloud.marisa.picturebackend.config.aliyun.green.MrsImageModeration;
+import cloud.marisa.picturebackend.config.aliyun.oss.AliyunOssConfigProperties;
 import cloud.marisa.picturebackend.entity.dao.Notice;
 import cloud.marisa.picturebackend.entity.dao.Picture;
 import cloud.marisa.picturebackend.enums.ReviewStatus;
@@ -52,6 +54,15 @@ public class PictureReviewManager {
     @Resource
     private INoticeService noticeService;
 
+    @Resource
+    private AliyunOssConfigProperties properties;
+
+    /**
+     * OSS对象存储工具类
+     */
+    @Resource
+    private AliyunOssUtil ossUtil;
+
 
     /**
      * AI图片自动审核接口（基于阿里云）
@@ -88,7 +99,11 @@ public class PictureReviewManager {
      * @throws Exception 可能的异常
      */
     public void aiAutoReview(Picture picture) throws Exception {
-        String url = picture.getUrl();
+        // String url = picture.getUrl();
+        // 防盗链不允许空Referer，但AI审核是使用的空Referer，所以这里得根据图片地址生成临时访问地址
+        String path = picture.getOriginalPath();
+        String url = ossUtil.generatePresignedUrl(path, 1800);
+        log.info("原图地址 {}", path);
         log.info("imageURL {}", url);
         String taskId = imageModerationApi.resolveResponse(imageModerationApi.createTask(url));
         log.info("创建的任务ID {}", taskId);

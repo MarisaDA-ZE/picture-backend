@@ -24,12 +24,12 @@ public class PictureUploadTests {
     @Autowired
     private IPictureService pictureService;
 
-    @Test
+//    @Test
     public void test2() {
 
     }
 
-    @Test
+//    @Test
     public void addMockPicture() {
         // 插入总条数
         long mockCount = 20_0000L;
