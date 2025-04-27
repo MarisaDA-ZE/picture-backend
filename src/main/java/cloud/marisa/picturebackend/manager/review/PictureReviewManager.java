@@ -4,7 +4,6 @@ import cloud.marisa.picturebackend.api.image.AliyunOssUtil;
 import cloud.marisa.picturebackend.api.picgreen.ImageModerationApi;
 import cloud.marisa.picturebackend.api.picgreen.MrsPictureIllegal;
 import cloud.marisa.picturebackend.config.aliyun.green.MrsImageModeration;
-import cloud.marisa.picturebackend.config.aliyun.oss.AliyunOssConfigProperties;
 import cloud.marisa.picturebackend.entity.dao.Notice;
 import cloud.marisa.picturebackend.entity.dao.Picture;
 import cloud.marisa.picturebackend.enums.ReviewStatus;
@@ -53,9 +52,6 @@ public class PictureReviewManager {
      */
     @Resource
     private INoticeService noticeService;
-
-    @Resource
-    private AliyunOssConfigProperties properties;
 
     /**
      * OSS对象存储工具类
