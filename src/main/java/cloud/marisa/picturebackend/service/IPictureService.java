@@ -3,6 +3,8 @@ package cloud.marisa.picturebackend.service;
 import cloud.marisa.picturebackend.api.image.imageexpand.entity.response.create.CreateTaskResponse;
 import cloud.marisa.picturebackend.entity.dao.Picture;
 import cloud.marisa.picturebackend.entity.dao.User;
+import cloud.marisa.picturebackend.entity.dto.api.RandomPictureRequest;
+import cloud.marisa.picturebackend.entity.dto.api.SearchPictureRequest;
 import cloud.marisa.picturebackend.entity.dto.common.DeleteRequest;
 import cloud.marisa.picturebackend.entity.dto.picture.*;
 import cloud.marisa.picturebackend.entity.vo.PictureVo;
@@ -192,4 +194,18 @@ public interface IPictureService extends IService<Picture> {
      * @param ids  ID列表
      */
     void delayRemoveCacheByKeys(List<Long> ids);
+
+    /**
+     * 获取随机图片
+     * @param request  请求参数封装
+     * @return  图片列表
+     */
+    List<PictureVo> getRandomPictures(RandomPictureRequest request);
+
+    /**
+     * 图片搜索
+     * @param request  请求参数封装
+     * @return  图片列表
+     */
+    List<PictureVo> searchPictures(SearchPictureRequest request);
 }

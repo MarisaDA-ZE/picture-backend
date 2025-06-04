@@ -4,10 +4,10 @@ import cloud.marisa.picturebackend.api.image.imageexpand.ImageOutPaintingApi;
 import cloud.marisa.picturebackend.api.image.imageexpand.entity.request.ImagePaintingParameters;
 import cloud.marisa.picturebackend.api.image.imageexpand.entity.request.ImageRequestParam;
 import cloud.marisa.picturebackend.api.image.imageexpand.entity.response.create.CreateTaskResponse;
-import cloud.marisa.picturebackend.entity.dao.Notice;
-import cloud.marisa.picturebackend.entity.dao.Picture;
-import cloud.marisa.picturebackend.entity.dao.Space;
-import cloud.marisa.picturebackend.entity.dao.User;
+import cloud.marisa.picturebackend.common.ApiConstants;
+import cloud.marisa.picturebackend.entity.dao.*;
+import cloud.marisa.picturebackend.entity.dto.api.RandomPictureRequest;
+import cloud.marisa.picturebackend.entity.dto.api.SearchPictureRequest;
 import cloud.marisa.picturebackend.entity.dto.common.DeleteRequest;
 import cloud.marisa.picturebackend.entity.dto.file.UploadPictureResult;
 import cloud.marisa.picturebackend.entity.dto.picture.*;
@@ -26,10 +26,7 @@ import cloud.marisa.picturebackend.manager.upload.AliyunPictureUploadMultipart;
 import cloud.marisa.picturebackend.manager.upload.AliyunPictureUploadURL;
 import cloud.marisa.picturebackend.mapper.PictureMapper;
 import cloud.marisa.picturebackend.queue.OverflowStorageDao;
-import cloud.marisa.picturebackend.service.INoticeService;
-import cloud.marisa.picturebackend.service.IPictureService;
-import cloud.marisa.picturebackend.service.ISpaceService;
-import cloud.marisa.picturebackend.service.IUserService;
+import cloud.marisa.picturebackend.service.*;
 import cloud.marisa.picturebackend.upload.picture.PictureMultipartFileUpload;
 import cloud.marisa.picturebackend.upload.picture.PictureUrlUpload;
 import cloud.marisa.picturebackend.util.*;
@@ -176,6 +173,11 @@ public class PictureServiceImpl
      * <p>如果任务满了，会持久化到Redis</p>
      */
     private final OverflowStorageDao<Picture> storage;
+
+    /**
+     * 图床API服务
+     */
+    private final IApiKeyService apiKeyService;
 
     /**
      * 以图片ID为键时的缓存前缀
@@ -1063,10 +1065,10 @@ public class PictureServiceImpl
             if (loggedUser != null) {
                 permissions = spaceUserAuthManager.getPermissionList(space, loggedUser);
                 // 公共空间
-                if(spaceId.equals(0L)){
+                if (spaceId.equals(0L)) {
                     boolean isAdmin = userService.hasPermission(loggedUser, MrsUserRole.ADMIN);
                     boolean isSelf = userId.equals(loggedUser.getId());
-                    if(isAdmin || isSelf){
+                    if (isAdmin || isSelf) {
                         permissions = spaceUserAuthManager.getPermissionsByRole(
                                 MrsSpaceRole.ADMIN.getValue()
                         );
@@ -1324,6 +1326,170 @@ public class PictureServiceImpl
 
     }
 
+    @Override
+    public List<PictureVo> getRandomPictures(RandomPictureRequest request) {
+        // 1. 获取API密钥关联的空间ID列表
+        ApiKey apiKey = apiKeyService.getOne(new LambdaQueryWrapper<ApiKey>()
+                .eq(ApiKey::getAccessKey, request.getAccessKey())
+                .eq(ApiKey::getSecretKey, request.getSecretKey())
+                .eq(ApiKey::getStatus, 1)
+                .eq(ApiKey::getIsDeleted, 0));
+
+        if (apiKey == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "API密钥不存在或已禁用");
+        }
+
+        List<Long> spaceIds = apiKeyService.getApiKeySpaces(apiKey.getId());
+
+        // 2. 构建查询条件
+        LambdaQueryWrapper<Picture> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(Picture::getReviewStatus, ReviewStatus.PASS.getValue());
+
+        // 3. 处理空间ID条件
+        if (spaceIds.isEmpty()) {
+            // 如果没有关联空间，则只能访问公共空间
+            queryWrapper.eq(Picture::getSpaceId, 0L);
+        } else {
+            // 可以访问关联的空间和公共空间
+            queryWrapper.and(wrapper -> wrapper
+                    .eq(Picture::getSpaceId, 0L)
+                    .or()
+                    .in(Picture::getSpaceId, spaceIds));
+        }
+
+        // 4. 处理图片尺寸条件
+        if (request.getMinWidth() != null) {
+            queryWrapper.ge(Picture::getPicWidth, request.getMinWidth());
+        }
+        if (request.getMaxWidth() != null) {
+            queryWrapper.le(Picture::getPicWidth, request.getMaxWidth());
+        }
+        if (request.getMinHeight() != null) {
+            queryWrapper.ge(Picture::getPicHeight, request.getMinHeight());
+        }
+        if (request.getMaxHeight() != null) {
+            queryWrapper.le(Picture::getPicHeight, request.getMaxHeight());
+        }
+
+        // 5. 获取符合条件的图片总数
+        long total = this.count(queryWrapper);
+        if (total == 0) {
+            return Collections.emptyList();
+        }
+
+        // 6. 随机获取指定数量的图片
+        List<Picture> pictures = new ArrayList<>();
+        int count = Math.min(request.getCount(), ApiConstants.MAX_PICTURE_COUNT);
+
+        // 使用随机数生成器
+        Random random = new Random();
+        Set<Long> selectedIds = new HashSet<>();
+
+        while (pictures.size() < count && selectedIds.size() < total) {
+            // 生成随机偏移量
+            long offset = random.nextInt((int) total);
+
+            // 使用分页查询获取随机图片
+            List<Picture> pagePictures = this.page(
+                    new Page<>(offset / 10 + 1, 10),
+                    queryWrapper
+            ).getRecords();
+
+            // 从未选择的图片中选择
+            for (Picture picture : pagePictures) {
+                if (!selectedIds.contains(picture.getId())) {
+                    pictures.add(picture);
+                    selectedIds.add(picture.getId());
+                    if (pictures.size() >= count) {
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 7. 转换为VO对象
+        return pictures.stream()
+                .map(PictureVo::toVO)
+                .collect(Collectors.toList());
+    }
+
+    @Override
+    public List<PictureVo> searchPictures(SearchPictureRequest request) {
+        // 1. 获取API密钥关联的空间ID列表
+        ApiKey apiKey = apiKeyService.getOne(new LambdaQueryWrapper<ApiKey>()
+                .eq(ApiKey::getAccessKey, request.getAccessKey())
+                .eq(ApiKey::getSecretKey, request.getSecretKey())
+                .eq(ApiKey::getStatus, 1)
+                .eq(ApiKey::getIsDeleted, 0));
+
+        if (apiKey == null) {
+            throw new BusinessException(ErrorCode.NOT_FOUND, "API密钥不存在或已禁用");
+        }
+
+        List<Long> spaceIds = apiKeyService.getApiKeySpaces(apiKey.getId());
+
+        // 2. 构建查询条件
+        LambdaQueryWrapper<Picture> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(Picture::getReviewStatus, ReviewStatus.PASS.getValue());
+
+        // 3. 处理空间ID条件
+        if (spaceIds.isEmpty()) {
+            // 如果没有关联空间，则只能访问公共空间
+            queryWrapper.eq(Picture::getSpaceId, 0L);
+        } else {
+            // 可以访问关联的空间和公共空间
+            queryWrapper.and(wrapper -> wrapper
+                    .eq(Picture::getSpaceId, 0L)
+                    .or()
+                    .in(Picture::getSpaceId, spaceIds));
+        }
+
+        // 模糊搜名称
+        if (StrUtil.isNotBlank(request.getKeyword())) {
+            queryWrapper.like(Picture::getName, request.getKeyword());
+        }
+
+        // 标签，JSON字符串数组["tag1", "tag2", ...]
+        if (StrUtil.isNotBlank(request.getTag()) && JSONUtil.isTypeJSONArray(request.getTag())) {
+            List<String> tags = JSONUtil.toList(request.getTag(), String.class);
+            for (String tag : tags) {
+                queryWrapper.like(Picture::getTags, "\"" + tag + "\"");
+            }
+        }
+
+        // 分类，单分类
+        if (StrUtil.isNotBlank(request.getCategory())) {
+            queryWrapper.eq(Picture::getCategory, request.getCategory());
+        }
+
+        // 5. 处理图片尺寸条件
+        if (request.getMinWidth() != null) {
+            queryWrapper.ge(Picture::getPicWidth, request.getMinWidth());
+        }
+        if (request.getMaxWidth() != null) {
+            queryWrapper.le(Picture::getPicWidth, request.getMaxWidth());
+        }
+        if (request.getMinHeight() != null) {
+            queryWrapper.ge(Picture::getPicHeight, request.getMinHeight());
+        }
+        if (request.getMaxHeight() != null) {
+            queryWrapper.le(Picture::getPicHeight, request.getMaxHeight());
+        }
+
+        // 获取符合条件的图片
+        List<Picture> pictures = this.list(queryWrapper);
+
+        // 如果结果超过限制，随机选择指定数量
+        int count = Math.min(request.getCount(), ApiConstants.MAX_PICTURE_COUNT);
+        if (pictures.size() > count) {
+            Collections.shuffle(pictures);
+            pictures = pictures.subList(0, count);
+        }
+        // 转VO并返回
+        return pictures.stream()
+                .map(PictureVo::toVO)
+                .collect(Collectors.toList());
+    }
 
     /**
      * 动态添加颜色相似性条件

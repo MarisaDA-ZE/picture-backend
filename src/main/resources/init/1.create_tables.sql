@@ -173,3 +173,51 @@ CREATE TABLE `user_vip`  (
 ) ENGINE = InnoDB CHARACTER SET = utf8mb4 COLLATE = utf8mb4_0900_ai_ci COMMENT = '会员表' ROW_FORMAT = Dynamic;
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+
+-- 图床API密钥表
+DROP TABLE IF EXISTS `api_key`;
+CREATE TABLE `api_key` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `access_key` varchar(64) NOT NULL COMMENT '访问密钥',
+    `secret_key` varchar(64) NOT NULL COMMENT '密钥',
+    `name` varchar(64) NOT NULL COMMENT '密钥名称',
+    `description` varchar(255) DEFAULT NULL COMMENT '密钥描述',
+    `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态：0-禁用 1-启用',
+    `daily_limit` int NOT NULL DEFAULT '1000' COMMENT '每日调用限制',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    `update_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
+    `is_deleted` tinyint NOT NULL DEFAULT '0' COMMENT '是否删除',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_access_key` (`access_key`),
+    KEY `idx_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='图床API密钥表';
+
+-- API调用记录表
+DROP TABLE IF EXISTS `api_call_record`;
+CREATE TABLE `api_call_record` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `api_key_id` bigint NOT NULL COMMENT 'API密钥ID',
+    `user_id` bigint NOT NULL COMMENT '用户ID',
+    `call_type` varchar(32) NOT NULL COMMENT '调用类型',
+    `call_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '调用时间',
+    `ip` varchar(64) DEFAULT NULL COMMENT '调用IP',
+    `status` tinyint NOT NULL DEFAULT '1' COMMENT '状态：0-失败 1-成功',
+    PRIMARY KEY (`id`),
+    KEY `idx_api_key_id` (`api_key_id`),
+    KEY `idx_user_id` (`user_id`),
+    KEY `idx_call_time` (`call_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='API调用记录表';
+
+-- API密钥与空间关联表
+DROP TABLE IF EXISTS `api_key_space`;
+CREATE TABLE `api_key_space` (
+    `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键',
+    `api_key_id` bigint NOT NULL COMMENT 'API密钥ID',
+    `space_id` bigint NOT NULL COMMENT '空间ID',
+    `create_time` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
+    PRIMARY KEY (`id`),
+    UNIQUE KEY `uk_api_key_space` (`api_key_id`,`space_id`),
+    KEY `idx_space_id` (`space_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='API密钥与空间关联表';

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="cloud.marisa.picturebackend.mapper.ApiCallRecordMapper">
+
+    <resultMap id="BaseResultMap" type="cloud.marisa.picturebackend.entity.dao.ApiCallRecord">
+            <id property="id" column="id" jdbcType="BIGINT"/>
+            <result property="apiKeyId" column="api_key_id" jdbcType="BIGINT"/>
+            <result property="userId" column="user_id" jdbcType="BIGINT"/>
+            <result property="callType" column="call_type" jdbcType="VARCHAR"/>
+            <result property="callTime" column="call_time" jdbcType="TIMESTAMP"/>
+            <result property="ip" column="ip" jdbcType="VARCHAR"/>
+            <result property="status" column="status" jdbcType="TINYINT"/>
+    </resultMap>
+
+    <sql id="Base_Column_List">
+        id,api_key_id,user_id,
+        call_type,call_time,ip,
+        status
+    </sql>
+</mapper>
